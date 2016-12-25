@@ -131,9 +131,10 @@ $ tar xvf krusader-xx.xx.tar.gz
   it is fixed, but we treat it as the thin ice.
 
 CMake may be executed this way:
-$ mkdir krusader-build
-$ cd krusader-build
-$ cmake ../krusader -DCMAKE_INSTALL_PREFIX=/usr/ -DCMAKE_C_FLAGS="-O2 -fPIC" -DCMAKE_CXX_FLAGS="-O2 -fPIC"
+$ cd krusader
+$ mkdir build
+$ cd build
+$ cmake .. -DCMAKE_INSTALL_PREFIX=/usr/ -DCMAKE_C_FLAGS="-O2 -fPIC" -DCMAKE_CXX_FLAGS="-O2 -fPIC"
 
 Note: In this document there's an appendix 1 that may help.
 
