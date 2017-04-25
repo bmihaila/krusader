@@ -112,6 +112,12 @@ QString KrServices::chooseFullPathName(QStringList names, QString confName)
     return "";
 }
 
+bool KrServices::isExecutable(const QString &path)
+{
+    QFileInfo info(path);
+    return info.isFile() && info.isExecutable();
+}
+
 QString KrServices::registeredProtocol(QString mimetype)
 {
     if (slaveMap == 0) {
@@ -169,7 +175,7 @@ QString KrServices::quote(QString name)
     if (!name.contains('\''))
         return '\'' + name + '\'';
     if (!name.contains('"') && !name.contains('$'))
-        return "\"" + name + "\"";
+        return '\"' + name + '\'';
     return escape(name);
 }
 
@@ -237,8 +243,7 @@ QStringList KrServices::supportedTools() {
 
     // checksum utility
     supportedTool(tools, "MD5",
-                  QStringList() << "md5deep" << "md5sum" << "sha1deep" << "sha256deep"
-                  << "tigerdeep" << "whirlpooldeep" << "cfv",
+                  QStringList() << "md5sum",
                   "checksum utility");
 
     return tools;
@@ -259,7 +264,7 @@ QString KrServices::escapeFileUrl(QString urlString)
 {
     // Avoid that if a path contains a '#' then what follows the '#' be interpreted as the fragment identifier of
     // the URL and not a part of the file path; for more information https://bugs.kde.org/show_bug.cgi?id=270150 can be seen
-    return urlString.replace("#", "%23").replace("?", "%3F");
+    return urlString.replace('#', "%23").replace('?', "%3F");
 }
 
 QUrl KrServices::escapeFileUrl(const QUrl &url)

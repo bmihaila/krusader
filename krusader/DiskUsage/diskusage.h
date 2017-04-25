@@ -49,7 +49,7 @@
 
 #include <KWidgetsAddons/KSqueezedTextLabel>
 
-#include "../VFS/vfs.h"
+#include "../FileSystem/filesystem.h"
 #include "filelightParts/fileTree.h"
 
 #define VIEW_LINES      0
@@ -70,7 +70,7 @@ class DiskUsage : public QStackedWidget
     Q_OBJECT
 
 public:
-    DiskUsage(QString confGroup, QWidget *parent = 0);
+    explicit DiskUsage(QString confGroup, QWidget *parent = 0);
     ~DiskUsage();
 
     void       load(const QUrl &dirName);
@@ -173,9 +173,9 @@ protected:
     QStack<QString> directoryStack;
     QStack<Directory *> parentStack;
 
-    vfs       * searchVfs;
-    vfile     * currentVfile;
-    QList<vfile *> vfiles;
+    FileSystem       * searchFileSystem;
+    FileItem     * currentFileItem;
+    QList<FileItem *> fileItems;
     Directory * currentParent;
     QString     dirToCheck;
 
@@ -192,7 +192,7 @@ class LoaderWidget : public QScrollArea
     Q_OBJECT
 
 public:
-    LoaderWidget(QWidget *parent = 0);
+    explicit LoaderWidget(QWidget *parent = 0);
 
     void init();
     void setCurrentURL(const QUrl &url);

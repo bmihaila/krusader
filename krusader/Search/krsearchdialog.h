@@ -56,7 +56,7 @@ class KrSearchDialog : public QDialog
 {
     Q_OBJECT
 public:
-    KrSearchDialog(QString profile = QString(), QWidget* parent = 0);
+    explicit KrSearchDialog(QString profile = QString(), QWidget* parent = 0);
     ~KrSearchDialog();
 
     void prepareGUI();
@@ -68,8 +68,7 @@ public slots:
     void stopSearch();
     void feedToListBox();
     void copyToClipBoard();
-    void found(QString what, QString where, KIO::filesize_t size, time_t mtime, QString perm,
-               uid_t uid, gid_t gid, QString foundText);
+    void slotFound(const FileItem &file, const QString &foundText);
     void closeDialog(bool isAccept = true);
     void executed(const QString &name);
     void currentChanged(KrViewItem *item);

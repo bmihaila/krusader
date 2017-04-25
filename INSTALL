@@ -37,8 +37,8 @@ probably use similar names:
 - libqt5core5           Qt 5 core module
 - libqt5gui5            Qt 5 GUI module
 - libqt5printsupport5   Qt 5 print support module
-- libstdc++6            The GNU Standard C++ Library v3 
-- zlib1g                compression library - runtime 
+- libstdc++6            The GNU Standard C++ Library v3
+- zlib1g                compression library - runtime
 
 
 --- Suggested packages
@@ -49,11 +49,18 @@ This is a list of the package names that Debian/Ubuntu/Kubuntu 16.04 use, other 
 distros will probably use similar names:
 
 - arj                   archiver for .arj files
-- ark                   archive utility for KDE
+- ark                   archive utility by KDE
 - bzip2                 high-quality block-sorting file compressor - utilities
 - cpio                  GNU cpio -- a program to manage archives of files
 
 - kate                  Powerful Text Editor
+
+- kde-cli-tools         tools required to edit file types from Properties dialog
+                        or run Krusader in root mode
+
+- kio-extras            Enables transparent handling of various archive types
+                        such as .tar and network protocols like SFTP
+
 - kmail                 KDE Email client
 
 - kdiff3                compares and merges 2 or 3 files or directories
@@ -62,7 +69,7 @@ or kompare              file difference viewer
 or xxdiff               a graphical file and directories comparison and merge tool
 
 - konsole               X terminal emulator
-- krename               Powerful batch renamer for KDE
+- krename               Powerful batch renamer by KDE
                         (at moment of writing: still based on KDE4)
 - lhasa                 lzh archiver
 
@@ -90,6 +97,7 @@ run the Krusader binary you don't need to install these packages.
 - cmake                  a cross-platform, open-source make system
 - extra-cmake-modules    extra cmake modules for compiling KDE Frameworks
 - qt5-default            development files for the Qt5 libraries
+- gettext                GNU Internationalization utilities
 - plasma-framework-dev   development files for plasma-framework
 
 The following packages should install (through dependencies) all the packages
@@ -104,14 +112,14 @@ you need to compile a KDE 5 software
 
 --- Krusader development download
 
-Krusader is developed in KDE Extragear. If someone wants to download and use 
+Krusader is developed in KDE Extragear. If someone wants to download and use
 the latest available Krusader sourcecode with git:
 $ git clone http://anongit.kde.org/krusader
 
 Otherwise, if someone wants to use a .tar.gz version:
 $ tar xvf krusader-xx.xx.tar.gz
-  
-  
+
+
 --- Some CMake options. Cmake execution
 
 -DCMAKE_INSTALL_PREFIX=/usr
@@ -125,6 +133,10 @@ $ tar xvf krusader-xx.xx.tar.gz
 
 -DQT_PLUGIN_INSTALL_DIR=
   many system force this path to keep kde4 plugins separated from the kde5 ones
+
+-DKDESU_PATH=/foo/bar/kdesu
+  this needs to be set on distributions that override default kdesu installation
+  path (libexec/kf5/kdesu) or if your install prefix doesn't match KDE's.
 
 -DENABLE_SYNCHRONIZER=OFF
   disables building the Synchronizer module. This module caused data loss, now
@@ -144,6 +156,7 @@ Note: In this document there's an appendix 1 that may help.
 Compilation will take about 5 to 10 minutes depending on your CPU speed.
 
 Execute:
+# Note: On a multi cpu/core system you might want to speed up the compile process by increasing the number of jobs (e.g. `make -j4`)
 $ make
 
 # At the beginning of the following command: `sudo` must be added if Kubuntu, Ubuntu, Debian, or similar is being used
@@ -154,14 +167,21 @@ Note: In this document there's an appendix 2 that may help.
 
 --- To achieve that Krusader uses another language
 
-There is a list of translation files in the [10n.kde.org Krusader page](https://l10n.kde.org/stats/gui/trunk-kf5/po/krusader.po/index.html). In that list anyone can look for his desired translation file, hover the mouse cursor over its link, see its tooltip to look up the appropriate LANGUAGE_CODE (which is shown between parentheses, e.g. if on the tooltip it's seen "German (de)" that means that LANGUAGE_CODE is: de), click on the link (in order to download the proper krusader.po file), and execute:
+There is a list of translation files in the [10n.kde.org Krusader page](https://l10n.kde.org/stats/gui/trunk-kf5/po/krusader.po/index.html).
+In that list anyone can look for his desired translation file, hover the mouse cursor over its link, see its tooltip to look up the
+appropriate LANGUAGE_CODE (which is shown between parentheses, e.g. if on the tooltip it's seen "German (de)" that means that
+LANGUAGE_CODE is: de), click on the link (in order to download the proper krusader.po file), and execute:
 
     # Transform the downloaded file
     msgfmt krusader.po -o krusader.mo
 
     # At the beginning of the following command: `sudo` must be added if Kubuntu, Ubuntu, Debian, or similar is being used.
-    # In the following command, the text XXXXXXX must be replaced by the LANGUAGE_CODE that was previously found 
-    su -c "cp -a krusader.mo /usr/share/locale/XXXXXXX/LC_MESSAGES/"    
+    # In the following command, the text XXXXXXX must be replaced by the LANGUAGE_CODE that was previously found
+    su -c "cp -a krusader.mo /usr/share/locale/XXXXXXX/LC_MESSAGES/"
+
+Note: If, in the future, someone would need to automate the downloading of a krusader.po file, he could use:
+    # In the following command, the text XXXXXXX must be replaced by the LANGUAGE_CODE that was previously found
+    $ wget -U "Mozilla/5.0" https://websvn.kde.org/*checkout*/trunk/l10n-kf5/XXXXXXX/messages/extragear-utils/krusader.po
 
 
 --- Execution
@@ -175,7 +195,7 @@ $ krusader
 # At the beginning of the following command: `sudo` must be added if Kubuntu, Ubuntu, Debian, or similar is being used
 $ su -c "make uninstall"
 
- 
+
 --- Appendix 1
 
 If it can be useful, this is the output of cmake on Kubuntu 15.04:

@@ -355,12 +355,26 @@ void KgPanel::setupPanelTab()
     // -------------------- Panel Font ----------------------------------
     QHBoxLayout *hbox = new QHBoxLayout();
 
-    hbox->addWidget(new QLabel(i18n("View font:"), panelGrp));
+    QHBoxLayout *fontLayout = new QHBoxLayout();
+    fontLayout->addWidget(new QLabel(i18n("View font:"), panelGrp));
+    KonfiguratorFontChooser *chsr =
+        createFontChooser("Look&Feel", "Filelist Font", _FilelistFont, panelGrp, true, PAGE_VIEW);
+    fontLayout->addWidget(chsr);
+    fontLayout->addStretch(1);
+    hbox->addLayout(fontLayout, 1);
 
-    KonfiguratorFontChooser * chsr = createFontChooser("Look&Feel", "Filelist Font", _FilelistFont, panelGrp, true, PAGE_VIEW);
-    hbox->addWidget(chsr);
-
-    hbox->addWidget(createSpacer(panelGrp));
+    // -------------------- Panel Tooltip ----------------------------------
+    QHBoxLayout *tooltipLayout = new QHBoxLayout();
+    QLabel *tooltipLabel = new QLabel(i18n("Tooltip delay (msec):"));
+    tooltipLabel->setWhatsThis(i18n("The duration after a tooltip is shown for a file item, in "
+                                    "milliseconds. Set a negative value to disable tooltips."));
+    tooltipLayout->addWidget(tooltipLabel);
+    KonfiguratorSpinBox *tooltipSpinBox = createSpinBox("Look&Feel", "Panel Tooltip Delay", 1000,
+                                                        -100, 5000, panelGrp, false, PAGE_VIEW);
+    tooltipSpinBox->setSingleStep(100);
+    tooltipLayout->addWidget(tooltipSpinBox);
+    tooltipLayout->addStretch(1);
+    hbox->addLayout(tooltipLayout, 1);
 
     panelGrid->addLayout(hbox, 1, 0);
 
@@ -438,7 +452,7 @@ void KgPanel::setupPanelTab()
     const int viewsSize = views.size();
     KONFIGURATOR_NAME_VALUE_PAIR *panelTypes = new KONFIGURATOR_NAME_VALUE_PAIR[ viewsSize ];
 
-    QString defType = "0";
+    QString defType = QString('0');
 
     for (int i = 0; i != viewsSize; i++) {
         KrViewInstance * inst = views[ i ];
@@ -600,9 +614,6 @@ void KgPanel::setupMouseModeTab()
         {"Custom Selection Mode",  "Space Moves Down",  _SpaceMovesDown,
          i18n("Spacebar moves down"), true,
          i18n("If checked, pressing the spacebar will select the current item and move down.\nOtherwise, current item is selected, but remains the current item.") },
-        {"Custom Selection Mode",  "Space Calc Space",  _SpaceCalcSpace,
-         i18n("Spacebar calculates disk space"), true,
-         i18n("If checked, pressing the spacebar while the current item is a folder, will (except from selecting the folder)\ncalculate space occupied of the folder (recursively).") },
         {"Custom Selection Mode",  "Insert Moves Down",  _InsertMovesDown,
          i18n("Insert moves down"), true,
          i18n("If checked, pressing Insert will select the current item, and move down to the next item.\nOtherwise, current item is not changed.") },
@@ -612,7 +623,7 @@ void KgPanel::setupMouseModeTab()
     };
 
 
-    mouseCheckboxes = createCheckBoxGroup(1, 0, mouseCheckboxesParam, 11 /*count*/, mouseDetailGroup, PAGE_MOUSE);
+    mouseCheckboxes = createCheckBoxGroup(1, 0, mouseCheckboxesParam, 10 /*count*/, mouseDetailGroup, PAGE_MOUSE);
     mouseDetailGrid->addWidget(mouseCheckboxes, 1, 0);
 
     for (int i = 0; i < mouseCheckboxes->count(); i++)
@@ -712,7 +723,6 @@ void KgPanel::slotSelectionModeChanged()
     mouseCheckboxes->find("Right Preserves")->setChecked(selectionMode->rightButtonPreservesSelection());
     mouseCheckboxes->find("ShiftCtrl Right Selects")->setChecked(selectionMode->shiftCtrlRightButtonSelects());
     mouseCheckboxes->find("Space Moves Down")->setChecked(selectionMode->spaceMovesDown());
-    mouseCheckboxes->find("Space Calc Space")->setChecked(selectionMode->spaceCalculatesDiskSpace());
     mouseCheckboxes->find("Insert Moves Down")->setChecked(selectionMode->insertMovesDown());
     mouseCheckboxes->find("Immediate Context Menu")->setChecked(selectionMode->showContextMenu() == -1);
 }

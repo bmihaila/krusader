@@ -40,10 +40,10 @@
 #include "krviewfactory.h"
 #include "krviewitemdelegate.h"
 #include "krviewitem.h"
-#include "krvfsmodel.h"
+#include "listmodel.h"
 #include "krmousehandler.h"
 #include "krcolorcache.h"
-#include "../VFS/krpermhandler.h"
+#include "../FileSystem/krpermhandler.h"
 #include "../defaults.h"
 #include "../GUI/krstyleproxy.h"
 
@@ -62,7 +62,10 @@ KrInterBriefView::KrInterBriefView(QWidget *parent, KrViewInstance &instance, KC
     KConfigGroup grpSvr(_config, "Look&Feel");
     _viewFont = grpSvr.readEntry("Filelist Font", _FilelistFont);
 
-    setStyle(new KrStyleProxy());
+    KrStyleProxy *style = new KrStyleProxy();
+    style->setParent(this);
+    setStyle(style);
+    viewport()->setStyle(style); // for custom tooltip delay
     setItemDelegate(new KrViewItemDelegate());
     setMouseTracking(true);
     setAcceptDrops(true);
@@ -133,8 +136,8 @@ void KrInterBriefView::setup()
     _header->setSectionResizeMode(QHeaderView::Fixed);
     _header->setSectionsClickable(true);
     _header->setSortIndicatorShown(true);
-    connect(_header, SIGNAL(sortIndicatorChanged(int, Qt::SortOrder)),
-            _model, SLOT(sort(int, Qt::SortOrder)));
+    connect(_header, SIGNAL(sortIndicatorChanged(int,Qt::SortOrder)),
+            _model, SLOT(sort(int,Qt::SortOrder)));
     _header->installEventFilter(this);
 
     _numOfColumns = _properties->numberOfColumns;
@@ -146,9 +149,19 @@ void KrInterBriefView::keyPressEvent(QKeyEvent *e)
 {
     if (!e || !_model->ready())
         return ; // subclass bug
-    if ((e->key() != Qt::Key_Left && e->key() != Qt::Key_Right) &&
-            (handleKeyEvent(e)))      // did the view class handled the event?
+
+    if (handleKeyEvent(e))
         return;
+
+    QAbstractItemView::keyPressEvent(e);
+}
+
+bool KrInterBriefView::handleKeyEvent(QKeyEvent *e)
+{
+    if ((e->key() != Qt::Key_Left && e->key() != Qt::Key_Right) &&
+            (KrView::handleKeyEvent(e)))      // did the view class handled the event?
+        return true;
+
     switch (e->key()) {
     case Qt::Key_Right : {
         if (e->modifiers() == Qt::ControlModifier) {   // let the panel handle it
@@ -178,7 +191,7 @@ void KrInterBriefView::keyPressEvent(QKeyEvent *e)
         }
         if (e->modifiers() & Qt::ShiftModifier)
             op()->emitSelectionChanged();
-        break;
+        return true;
     }
     case Qt::Key_Left : {
         if (e->modifiers() == Qt::ControlModifier) {   // let the panel handle it
@@ -208,11 +221,11 @@ void KrInterBriefView::keyPressEvent(QKeyEvent *e)
         }
         if (e->modifiers() & Qt::ShiftModifier)
             op()->emitSelectionChanged();
-        break;
+        return true;
     }
-    default:
-        QAbstractItemView::keyPressEvent(e);
     }
+
+    return false;
 }
 
 void KrInterBriefView::wheelEvent(QWheelEvent *ev)
@@ -436,15 +449,16 @@ void KrInterBriefView::paintEvent(QPaintEvent *e)
         option.rect = visualRect(mndx);
         painter.save();
 
-        bool focus = curr.isValid() && curr.row() == mndx.row() && hasFocus();
-
         itemDelegate()->paint(&painter, option, mndx);
 
-        if (focus) {
+        // (always) draw dashed line border around current item row
+        const bool isCurrent = curr.isValid() && curr.row() == mndx.row();
+        if (isCurrent) {
             QStyleOptionFocusRect o;
             o.QStyleOption::operator=(option);
             QPalette::ColorGroup cg = QPalette::Normal;
             o.backgroundColor = option.palette.color(cg, QPalette::Background);
+
             style()->drawPrimitive(QStyle::PE_FrameFocusRect, &o, &painter);
         }
 
@@ -573,9 +587,9 @@ void KrInterBriefView::intersectionSet(const QRect &rect, QVector<QModelIndex> &
         }
 }
 
-QRect KrInterBriefView::itemRect(const vfile *vf)
+QRect KrInterBriefView::itemRect(const FileItem *item)
 {
-    return visualRect(_model->vfileIndex(vf));
+    return visualRect(_model->fileItemIndex(item));
 }
 
 void KrInterBriefView::copySettingsFrom(KrView *other)
@@ -668,25 +682,6 @@ void KrInterBriefView::dropEvent(QDropEvent *ev)
 {
     if (!_mouseHandler->dropEvent(ev))
         QAbstractItemView::dropEvent(ev);
-}
-
-bool KrInterBriefView::viewportEvent(QEvent * event)
-{
-    if (event->type() == QEvent::ToolTip) {
-        QHelpEvent *he = static_cast<QHelpEvent*>(event);
-        const QModelIndex index = indexAt(he->pos());
-
-        if (index.isValid()) {
-            int width = visualRect(index).width();
-            int textWidth = elementWidth(index);
-
-            if (textWidth <= width) {
-                event->accept();
-                return true;
-            }
-        }
-    }
-    return QAbstractItemView::viewportEvent(event);
 }
 
 QRect KrInterBriefView::mapToViewport(const QRect &rect) const

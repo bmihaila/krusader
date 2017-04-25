@@ -365,7 +365,7 @@ distros will probably use similar names.</para>
         <para>arj: archiver for .arj files </para>
       </listitem>
       <listitem>
-        <para>ark: graphical archiving tool for KDE</para>
+        <para>ark: graphical archiving tool by KDE</para>
       </listitem>
       <listitem>
         <para>bzip2: high-quality block-sorting file compressor - utilities</para>
@@ -389,10 +389,10 @@ distros will probably use similar names.</para>
         <para>okteta: KDE hex editor</para>
       </listitem>
       <listitem>
-        <para>konsole: X terminal emulator for KDE </para>
+        <para>konsole: X terminal emulator by KDE </para>
       </listitem>
       <listitem>
-        <para>krename: Powerful batch renamer for KDE</para>
+        <para>krename: Powerful batch renamer by KDE</para>
       </listitem>
       <listitem>
         <para>lha: lzh archiver</para>
@@ -676,7 +676,7 @@ if you only run a Krusader binary you do not need these packages.</para>
     <screen><prompt>$</prompt> <userinput><command>krusader</command> <replaceable>--left=&lt;path&gt; --right=&lt;path&gt;</replaceable></userinput></screen>
     <screen><prompt>$</prompt> <userinput><command>krusader</command> <replaceable>--left=/mnt/cdrom --right=ftp://downloads@myserver.net</replaceable></userinput></screen>
     <screen><prompt>$</prompt> <userinput><command>krusader</command> <replaceable>--left=&lt;path1&gt;,&lt;path2&gt; --right=&lt;path1&gt;,&lt;path2&gt;,&lt;path3&gt;</replaceable></userinput></screen>
-    <screen><prompt>$</prompt> <userinput><command>krusader</command><replaceable>--profile &lt;panel-profile&gt;</replaceable></userinput></screen>
+    <screen><prompt>$</prompt> <userinput><command>krusader</command> <replaceable>--profile &lt;panel-profile&gt;</replaceable></userinput></screen>
     <screen><prompt>$</prompt> <userinput><command>krusader</command> <replaceable>--profile ftp-managment</replaceable></userinput></screen>
     </para>
     <para>The standard &Qt; and &kf5; command-line options are available.

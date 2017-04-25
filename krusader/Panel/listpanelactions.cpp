@@ -71,7 +71,7 @@ ListPanelActions::ListPanelActions(QObject *parent, KrMainWindow *mainWindow) :
     actHistoryBackward = stdAction(KStandardAction::Back, _func, SLOT(historyBackward()));
     actHistoryForward = stdAction(KStandardAction::Forward, _func, SLOT(historyForward()));
     //FIXME: second shortcut for up: see actDirUp
-    //   KStandardAction::up( this, SLOT( dirUp() ), actionCollection )->setShortcut(Qt::Key_Backspace);
+    //   KStandardAction::up( this, SLOT(dirUp()), actionCollection )->setShortcut(Qt::Key_Backspace);
     /* Shortcut disabled because of the Terminal Emulator bug. */
     actDirUp = stdAction(KStandardAction::Up, _func, SLOT(dirUp()));
     actHome = stdAction(KStandardAction::Home, _func, SLOT(home()));
@@ -85,17 +85,17 @@ ListPanelActions::ListPanelActions(QObject *parent, KrMainWindow *mainWindow) :
     actF4 = action(i18n("Edit File"), 0, Qt::Key_F4, _func, SLOT(edit()) , "F4_Edit");
     actF5 = action(i18n("Copy to other panel"), 0, Qt::Key_F5, _func, SLOT(copyFiles()) , "F5_Copy");
     actF6 = action(i18n("Move..."), 0, Qt::Key_F6, _func, SLOT(moveFiles()) , "F6_Move");
-    actShiftF5 = action(i18n("Copy by queue..."), 0, Qt::SHIFT + Qt::Key_F5, _func, SLOT(copyFilesByQueue()) , "F5_Copy_Queue");
-    actShiftF6 = action(i18n("Move by queue..."), 0, Qt::SHIFT + Qt::Key_F6, _func, SLOT(moveFilesByQueue()) , "F6_Move_Queue");
+    actShiftF5 = action(i18n("Copy delayed..."), 0, Qt::SHIFT + Qt::Key_F5, _func, SLOT(copyFilesDelayed()) , "F5_Copy_Queue");
+    actShiftF6 = action(i18n("Move delayed..."), 0, Qt::SHIFT + Qt::Key_F6, _func, SLOT(moveFilesDelayed()) , "F6_Move_Queue");
     actF7 = action(i18n("New Folder..."), "folder-new", Qt::Key_F7, _func, SLOT(mkdir()) , "F7_Mkdir");
-    actF8 = action(i18n("Delete"), "edit-delete", Qt::Key_F8, _func, SLOT(deleteFiles()) , "F8_Delete");
+    actF8 = action(i18n("Delete"), "edit-delete", Qt::Key_F8, _func, SLOT(defaultDeleteFiles()) , "F8_Delete");
     actF9 = action(i18n("Start Terminal Here"), "utilities-terminal", Qt::Key_F9, _func, SLOT(terminal()) , "F9_Terminal");
     action(i18n("&New Text File..."), "document-new", Qt::SHIFT + Qt::Key_F4, _func, SLOT(editNew()), "edit_new_file");
     action(i18n("F3 View Dialog"), 0, Qt::SHIFT + Qt::Key_F3, _func, SLOT(viewDlg()), "F3_ViewDlg");
 
     // file operations
     action(i18n("Right-click Menu"), 0, Qt::Key_Menu, _gui, SLOT(rightclickMenu()), "rightclick menu");
-    actProperties = action(i18n("&Properties..."), 0, Qt::ALT + Qt::Key_Return, _func, SLOT(properties()), "properties");
+    actProperties = action(i18n("&Properties..."), "document-properties", Qt::ALT + Qt::Key_Return, _func, SLOT(properties()), "properties");
     actCompDirs = action(i18n("&Compare Folders"), "kr_comparedirs", Qt::ALT + Qt::SHIFT + Qt::Key_C, _gui, SLOT(compareDirs()), "compare dirs");
     actCalculate = action(i18n("Calculate &Occupied Space"), "accessories-calculator", 0, _func, SLOT(calcSpace()), "calculate");
     actPack = action(i18n("Pac&k..."), "archive-insert", Qt::ALT + Qt::SHIFT + Qt::Key_P, _func, SLOT(pack()), "pack");
@@ -117,7 +117,7 @@ ListPanelActions::ListPanelActions(QObject *parent, KrMainWindow *mainWindow) :
     actSetJumpBack = action(i18n("Set Jump Back Point"), "go-jump-definition", Qt::CTRL + Qt::SHIFT + Qt::Key_J, _gui, SLOT(setJumpBack()), "set_jump_back");
     actSyncBrowse = action(i18n("S&ynchron Folder Changes"), "kr_syncbrowse_off", Qt::ALT + Qt::SHIFT + Qt::Key_Y, _gui, SLOT(toggleSyncBrowse()), "sync browse");
     actLocationBar = action(i18n("Go to Location Bar"), 0, Qt::CTRL + Qt::Key_L, _gui, SLOT(editLocation()), "location_bar");
-    actSearchBar = action(i18n("Find in folder..."), 0, Qt::CTRL + Qt::SHIFT + Qt::Key_F, _gui, SLOT(showSearchBar()), "search bar");
+    actSearchBar = action(i18n("Find in folder..."), 0, Qt::CTRL + Qt::Key_F, _gui, SLOT(showSearchBar()), "search bar");
     action(i18n("Open search filter"), 0, Qt::CTRL + Qt::Key_I, _gui, SLOT(showSearchFilter()), "search bar filter");
     toggleAction(i18n("Toggle Popup Panel"), 0, Qt::ALT + Qt::Key_Down, _gui, SLOT(togglePanelPopup()), "toggle popup panel");
     action(i18n("Bookmarks"), 0, Qt::CTRL + Qt::Key_D, _gui, SLOT(openBookmarks()), "bookmarks");
@@ -174,11 +174,6 @@ inline KrPanel *ListPanelActions::leftPanel()
 inline KrPanel *ListPanelActions::rightPanel()
 {
     return static_cast<KrMainWindow*>(_mainWindow)->rightPanel();
-}
-
-inline ListPanelFunc *ListPanelActions::activeFunc()
-{
-    return activePanel()->func;
 }
 
 // set view type

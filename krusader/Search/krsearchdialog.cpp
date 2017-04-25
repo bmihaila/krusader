@@ -64,12 +64,13 @@
 #include "../Dialogs/krdialogs.h"
 #include "../Dialogs/krspecialwidgets.h"
 #include "../Dialogs/krsqueezedtextlabel.h"
-#include "../VFS/virt_vfs.h"
-#include "../VFS/krquery.h"
+#include "../FileSystem/virtualfilesystem.h"
+#include "../FileSystem/krquery.h"
 #include "../KViewer/krviewer.h"
 #include "../Panel/krsearchbar.h"
 #include "../Panel/krview.h"
 #include "../Panel/krviewfactory.h"
+#include "../Panel/krviewitem.h"
 #include "../Panel/krpanel.h"
 #include "../Panel/panelfunc.h"
 #include "../Filter/filtertabs.h"
@@ -78,60 +79,59 @@
 
 #define RESULTVIEW_TYPE 0
 
-class SearchResultContainer : public VfileContainer
+class SearchResultContainer : public DirListerInterface
 {
 public:
-    SearchResultContainer(QObject *parent) : VfileContainer(parent) {}
+    explicit SearchResultContainer(QObject *parent) : DirListerInterface(parent) {}
     virtual ~SearchResultContainer() {
         clear();
     }
 
-    virtual QList<vfile*> vfiles() Q_DECL_OVERRIDE {
-        return _vfiles;
+    virtual QList<FileItem *> fileItems() const Q_DECL_OVERRIDE {
+        return _fileItems;
     }
-    virtual unsigned long numVfiles() Q_DECL_OVERRIDE {
-        return _vfiles.count();
+    virtual unsigned long numFileItems() const Q_DECL_OVERRIDE {
+        return _fileItems.count();
     }
-    virtual bool isRoot() Q_DECL_OVERRIDE {
+    virtual bool isRoot() const Q_DECL_OVERRIDE {
         return true;
     }
 
     void clear() {
         emit cleared();
-        foreach(vfile *vf, _vfiles)
-            delete vf;
-        _vfiles.clear();
+        foreach(FileItem *fileitem, _fileItems)
+            delete fileitem;
+        _fileItems.clear();
         _foundText.clear();
     }
 
-    void addItem(QString path, KIO::filesize_t size, time_t mtime, QString perm,
-                 uid_t uid, gid_t gid, QString foundText)
+    void addItem(const FileItem &file, const QString &foundText)
     {
-        vfile *vf = new vfile(path, size, perm, mtime, false/*FIXME*/, false/*FIXME*/,
-                              uid, gid, QString(), QString(), 0, -1, QUrl::fromUserInput(path));
-        _vfiles << vf;
+        const QString path = file.getUrl().toDisplayString(QUrl::PreferLocalFile);
+        FileItem *fileitem = FileItem::createCopy(file, path);
+        _fileItems << fileitem;
         if(!foundText.isEmpty())
-            _foundText[vf] = foundText;
-        emit addedVfile(vf);
+            _foundText[fileitem] = foundText;
+        emit addedFileItem(fileitem);
     }
 
-    QString foundText(const vfile *vf) {
-        return _foundText[vf];
+    QString foundText(const FileItem *fileitem) {
+        return _foundText[fileitem];
     }
 
 private:
-    QList<vfile*> _vfiles;
-    QHash<const vfile*, QString> _foundText;
+    QList<FileItem *> _fileItems;
+    QHash<const FileItem *, QString> _foundText;
 };
 
 
 KrSearchDialog *KrSearchDialog::SearchDialog = 0;
 
-QString KrSearchDialog::lastSearchText = "*";
+QString KrSearchDialog::lastSearchText = QString('*');
 int KrSearchDialog::lastSearchType = 0;
 bool KrSearchDialog::lastSearchForCase = false;
 bool KrSearchDialog::lastContainsWholeWord = false;
-bool KrSearchDialog::lastContainsWithCase = true;
+bool KrSearchDialog::lastContainsWithCase = false;
 bool KrSearchDialog::lastSearchInSubDirs = true;
 bool KrSearchDialog::lastSearchInArchives = false;
 bool KrSearchDialog::lastFollowSymLinks = false;
@@ -227,9 +227,8 @@ KrSearchDialog::KrSearchDialog(QString profile, QWidget* parent)
     result = new SearchResultContainer(this);
     // the view
     resultView = KrViewFactory::createView(RESULTVIEW_TYPE, resultTab, krConfig);
-    resultView->init();
+    resultView->init(false);
     resultView->restoreSettings(KConfigGroup(&group, "ResultView"));
-    resultView->enableUpdateDefaultSettings(false);
     resultView->setMainWindow(this);
     resultView->prepareForActive();
     resultView->refreshColors();
@@ -276,8 +275,8 @@ KrSearchDialog::KrSearchDialog(QString profile, QWidget* parent)
     connect(profileManager, SIGNAL(saveToProfile(QString)), filterTabs, SLOT(saveToProfile(QString)));
 
     connect(resultView->op(), SIGNAL(currentChanged(KrViewItem*)), SLOT(currentChanged(KrViewItem*)));
-    connect(resultView->op(), SIGNAL(executed(const QString&)), SLOT(executed(const QString&)));
-    connect(resultView->op(), SIGNAL(contextMenu(const QPoint&)), SLOT(contextMenu(const QPoint &)));
+    connect(resultView->op(), SIGNAL(executed(QString)), SLOT(executed(QString)));
+    connect(resultView->op(), SIGNAL(contextMenu(QPoint)), SLOT(contextMenu(QPoint)));
 
     // tab order
 
@@ -383,15 +382,10 @@ void KrSearchDialog::resizeEvent(QResizeEvent *e)
     }
 }
 
-void KrSearchDialog::found(QString what, QString where, KIO::filesize_t size, time_t mtime, QString perm,
-                           uid_t uid, gid_t gid, QString foundText)
+void KrSearchDialog::slotFound(const FileItem &file, const QString &foundText)
 {
-    where = where.replace(QRegExp("\\\\"), "#"); //FIXME ? why is that done ?
-    QString path =  where.endsWith('/') ? (where + what) : (where + "/" + what);
-    if(perm[0] == 'd' && !path.endsWith('/')) // file is a directory
-        path += '/';
-    result->addItem(path, size, mtime, perm, uid, gid, foundText);
-    foundLabel->setText(i18np("Found %1 match.", "Found %1 matches.", result->numVfiles()));
+    result->addItem(file, foundText);
+    foundLabel->setText(i18np("Found %1 match.", "Found %1 matches.", result->numFileItems()));
 }
 
 bool KrSearchDialog::gui2query()
@@ -442,10 +436,9 @@ void KrSearchDialog::startSearch()
     if (searcher != 0)
         abort();
     searcher  = new KRSearchMod(query);
-    connect(searcher, SIGNAL(searching(const QString&)),
-            searchingLabel, SLOT(setText(const QString&)));
-    connect(searcher, SIGNAL(found(QString, QString, KIO::filesize_t, time_t, QString, uid_t, gid_t, QString)),
-            this, SLOT(found(QString, QString, KIO::filesize_t, time_t, QString, uid_t, gid_t, QString)));
+    connect(searcher, SIGNAL(searching(QString)),
+            searchingLabel, SLOT(setText(QString)));
+    connect(searcher, &KRSearchMod::found, this, &KrSearchDialog::slotFound);
     connect(searcher, SIGNAL(finished()), this, SLOT(stopSearch()));
 
     searcher->start();
@@ -459,7 +452,7 @@ void KrSearchDialog::startSearch()
     mainSearchBtn->setEnabled(true);
     mainCloseBtn->setEnabled(true);
     mainStopBtn->setEnabled(false);
-    if (result->numVfiles())
+    if (result->numFileItems())
         mainFeedToListBoxBtn->setEnabled(true);
     searchingLabel->setText(i18n("Finished searching."));
 
@@ -497,7 +490,7 @@ void KrSearchDialog::currentChanged(KrViewItem *item)
 {
     if(!item)
         return;
-    QString text = result->foundText(item->getVfile());
+    QString text = result->foundText(item->getFileItem());
     if(!text.isEmpty()) {
         // ugly hack: find the <b> and </b> in the text, then
         // use it to set the are which we don't want squeezed
@@ -554,14 +547,14 @@ void KrSearchDialog::editCurrent()
 {
     KrViewItem *current = resultView->getCurrentKrViewItem();
     if (current)
-        KrViewer::edit(current->getVfile()->vfile_getUrl(), this);
+        KrViewer::edit(current->getFileItem()->getUrl(), this);
 }
 
 void KrSearchDialog::viewCurrent()
 {
     KrViewItem *current = resultView->getCurrentKrViewItem();
     if (current)
-        KrViewer::view(current->getVfile()->vfile_getUrl(), this);
+        KrViewer::view(current->getFileItem()->getUrl(), this);
 }
 
 void KrSearchDialog::compareByContent()
@@ -571,7 +564,7 @@ void KrSearchDialog::compareByContent()
     if (list.count() != 2)
         return;
 
-    SLOTS->compareContent(list[0]->getVfile()->vfile_getUrl(), list[1]->getVfile()->vfile_getUrl());
+    SLOTS->compareContent(list[0]->getFileItem()->getUrl(),list[1]->getFileItem()->getUrl());
 }
 
 void KrSearchDialog::contextMenu(const QPoint &pos)
@@ -602,8 +595,8 @@ void KrSearchDialog::contextMenu(const QPoint &pos)
 
 void KrSearchDialog::feedToListBox()
 {
-    virt_vfs virtVfs;
-    virtVfs.refresh(QUrl::fromLocalFile("/"));
+    VirtualFileSystem virtFilesystem;
+    virtFilesystem.refresh(QUrl::fromLocalFile("/"));
 
     KConfigGroup group(krConfig, "Search");
     int listBoxNum = group.readEntry("Feed To Listbox Counter", 1);
@@ -615,24 +608,24 @@ void KrSearchDialog::feedToListBox()
         else
             queryName = i18n("Search results for \"%1\" containing \"%2\" in %3", query->nameFilter(), query->content(), where);
     }
-    QString vfsName;
+    QString fileSystemName;
     do {
-        vfsName = i18n("Search results") + QString(" %1").arg(listBoxNum++);
-    } while (virtVfs.getVfile(vfsName) != 0);
+        fileSystemName = i18n("Search results") + QString(" %1").arg(listBoxNum++);
+    } while (virtFilesystem.getFileItem(fileSystemName) != 0);
     group.writeEntry("Feed To Listbox Counter", listBoxNum);
 
     KConfigGroup ga(krConfig, "Advanced");
     if (ga.readEntry("Confirm Feed to Listbox",  _ConfirmFeedToListbox)) {
         bool ok;
-        vfsName = QInputDialog::getText(this, i18n("Query name"), i18n("Here you can name the file collection"),
-                                        QLineEdit::Normal, vfsName, &ok);
+        fileSystemName = QInputDialog::getText(this, i18n("Query name"), i18n("Here you can name the file collection"),
+                                        QLineEdit::Normal, fileSystemName, &ok);
         if (! ok)
             return;
     }
 
     QList<QUrl> urlList;
-    foreach(vfile *vf, result->vfiles())
-        urlList.push_back(vf->vfile_getUrl());
+    foreach(FileItem *fileitem, result->fileItems())
+        urlList.push_back(fileitem->getUrl());
 
     mainSearchBtn->setEnabled(false);
     mainCloseBtn->setEnabled(false);
@@ -640,10 +633,10 @@ void KrSearchDialog::feedToListBox()
 
     isBusy = true;
 
-    QUrl url = QUrl(QString("virt:/") + vfsName);
-    virtVfs.refresh(url);
-    virtVfs.addFiles(urlList);
-    virtVfs.setMetaInformation(queryName);
+    QUrl url = QUrl(QString("virt:/") + fileSystemName);
+    virtFilesystem.refresh(url);
+    virtFilesystem.addFiles(urlList);
+    virtFilesystem.setMetaInformation(queryName);
     //ACTIVE_FUNC->openUrl(url);
     ACTIVE_MNG->slotNewTab(url);
 
@@ -655,8 +648,8 @@ void KrSearchDialog::feedToListBox()
 void KrSearchDialog::copyToClipBoard()
 {
     QList<QUrl> urls;
-    foreach(vfile *vf, result->vfiles())
-        urls.push_back(vf->vfile_getUrl());
+    foreach(FileItem *fileitem, result->fileItems())
+        urls.push_back(fileitem->getUrl());
 
     if (urls.count() == 0)
         return;

@@ -20,9 +20,6 @@
 #ifndef KRVIEWITEM_H
 #define KRVIEWITEM_H
 
-#include "../VFS/vfile.h"
-#include "krview.h"
-
 // QtCore
 #include <QRect>
 #include <QString>
@@ -31,7 +28,9 @@
 
 #include <KIO/Global>
 
+class FileItem;
 class KrInterView;
+class KrViewProperties;
 
 /**
  * @brief A view item representing a file inside a KrView
@@ -39,23 +38,22 @@ class KrInterView;
 class KrViewItem
 {
     friend class KrView;
-    friend class KrCalcSpaceDialog;
 
 public:
-    KrViewItem(vfile *vf, KrInterView *parentView);
+    KrViewItem(FileItem *fileitem, KrInterView *parentView);
     virtual ~KrViewItem() {}
 
-    virtual const QString& name(bool withExtension = true) const;
-    virtual inline bool hasExtension() const {
+    const QString& name(bool withExtension = true) const;
+    inline bool hasExtension() const {
         return _hasExtension;
     }
-    virtual inline const QString& extension() const {
+    inline const QString& extension() const {
         return _extension;
     }
-    virtual QString dateTime() const;
-    virtual QString description() const;
+    /** Return description text for status bar. */
+    QString description() const;
 
-    virtual QPixmap icon();
+    QPixmap icon();
 
     bool isSelected() const;
     void setSelected(bool s);
@@ -63,31 +61,29 @@ public:
     void redraw();
 
     // DON'T USE THOSE OUTSIDE THE VIEWS!!!
-    inline const vfile* getVfile() const {
-        return _vf;
+    inline const FileItem* getFileItem() const {
+        return _fileitem;
     }
-    inline void setVfile(vfile *vf) {
-        _vf = vf;
+    inline void setFileItem(FileItem *fileitem) {
+        _fileitem = fileitem;
     }
-    inline vfile* getMutableVfile() {
-        return _vf;
+    inline FileItem* getMutableFileItem() {
+        return _fileitem;
     }
     inline bool isDummy() const {
-        return dummyVfile;
+        return dummyFileItem;
     }
     inline bool isHidden() const {
         return _hidden;
     }
 
     // used INTERNALLY when calculation of dir size changes the displayed size of the item
-    inline void setSize(KIO::filesize_t size) {
-        _vf->vfile_setSize(size);
-    }
+    void setSize(KIO::filesize_t size);
 
 protected:
-    vfile* _vf;   // each view item holds a pointer to a corresponding vfile for fast access
+    FileItem* _fileitem;   // each view item holds a pointer to a corresponding file item for fast access
     KrInterView * _view; // the parent view this item belongs to
-    bool dummyVfile; // used in case our item represents the ".." (updir) item
+    bool dummyFileItem; // used in case our item represents the ".." (updir) item
     const KrViewProperties* _viewProperties;
     bool _hasExtension;
     bool _hidden;

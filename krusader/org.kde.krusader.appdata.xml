@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component type="desktop">
   <id>org.kde.krusader.desktop</id>
-  <metadata_license>GFDL-1.2-without-invariant</metadata_license>
+  <metadata_license>GFDL-1.3</metadata_license>
+  <project_license>GPL-2.0 OR GPL-3.0</project_license>
   <name>Krusader</name>
   <name xml:lang="ast">Krusader</name>
   <name xml:lang="ca">Krusader</name>
@@ -175,7 +176,7 @@
       <li xml:lang="zh-CN">FTP 支持</li>
       <li>Advanced search module</li>
       <li xml:lang="ca">Mòdul de cerca avançada</li>
-      <li xml:lang="ca-valencia">Mòdul de cerca avançada</li>
+      <li xml:lang="ca-valencia">Mòdul de busca avançada</li>
       <li xml:lang="de">Erweitertes Suchmodul</li>
       <li xml:lang="el">Άρθρωμα προηγμένης αναζήτησης</li>
       <li xml:lang="en-GB">Advanced search module</li>

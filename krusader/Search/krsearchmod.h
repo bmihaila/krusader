@@ -42,18 +42,18 @@
 
 #include <KIO/Global>
 
-#include "../VFS/default_vfs.h"
-#include "../VFS/virt_vfs.h"
+#include "../FileSystem/defaultfilesystem.h"
+#include "../FileSystem/virtualfilesystem.h"
 
 
 class KRQuery;
-class ftp_vfs;
+class ftp_fileSystem;
 
 class KRSearchMod : public QObject
 {
     Q_OBJECT
 public:
-    KRSearchMod(const KRQuery *q);
+    explicit KRSearchMod(const KRQuery *q);
     ~KRSearchMod();
 
     void scanURL(QUrl url);
@@ -61,14 +61,13 @@ public:
     void stop();
 
 private:
-    void scanLocalDir(QUrl url);
+    void scanLocalDir(const QUrl &url);
     void scanRemoteDir(QUrl url);
 
 signals:
     void finished();
     void searching(const QString&);
-    void found(QString what, QString where,KIO::filesize_t size, time_t mtime,
-               QString perm, uid_t owner, gid_t group, QString textFound);
+    void found(const FileItem &file, const QString &foundText);
 
 private slots:
     void slotProcessEvents(bool & stopped);
@@ -80,8 +79,8 @@ private:
     KRQuery *query;
     QStringList results;
 
-    default_vfs *remote_vfs;
-    virt_vfs *virtual_vfs;
+    DefaultFileSystem *remote_fileSystem;
+    VirtualFileSystem *virtual_fileSystem;
 
     QTime timer;
 };

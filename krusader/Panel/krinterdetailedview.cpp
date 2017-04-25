@@ -23,10 +23,11 @@
 #include <QDir>
 #include <QHashIterator>
 // QtWidgets
+#include <QApplication>
 #include <QDirModel>
 #include <QHeaderView>
 #include <QMenu>
-#include <QApplication>
+#include <QToolTip>
 
 #include <KConfigCore/KSharedConfig>
 #include <KI18n/KLocalizedString>
@@ -35,8 +36,8 @@
 #include "krviewfactory.h"
 #include "krviewitemdelegate.h"
 #include "krviewitem.h"
-#include "krvfsmodel.h"
-#include "../VFS/krpermhandler.h"
+#include "listmodel.h"
+#include "../FileSystem/krpermhandler.h"
 #include "../defaults.h"
 #include "../krglobal.h"
 #include "krmousehandler.h"
@@ -51,35 +52,36 @@ KrInterDetailedView::KrInterDetailedView(QWidget *parent, KrViewInstance &instan
 {
     connect(_mouseHandler, SIGNAL(renameCurrentItem()), this, SLOT(renameCurrentItem()));
     setWidget(this);
-    KConfigGroup group(krConfig, "Private");
 
     KConfigGroup grpSvr(_config, "Look&Feel");
     _viewFont = grpSvr.readEntry("Filelist Font", _FilelistFont);
 
-    this->setModel(_model);
-    this->setRootIsDecorated(false);
-
-    setSelectionModel(new DummySelectionModel(_model, this));
-
-    header()->installEventFilter(this);
-
-    setSelectionMode(QAbstractItemView::NoSelection);
+    setModel(_model);
+    setRootIsDecorated(false);
+    setItemsExpandable(false);
     setAllColumnsShowFocus(true);
     setUniformRowHeights(true);
 
-    KrStyleProxy *krstyle = new KrStyleProxy();
-    krstyle->setParent(this);
-    setStyle(krstyle);
-    setItemDelegate(new KrViewItemDelegate(this));
     setMouseTracking(true);
     setAcceptDrops(true);
     setDropIndicatorShown(true);
 
+    setSelectionMode(QAbstractItemView::NoSelection);
+    setSelectionModel(new DummySelectionModel(_model, this));
+
+    header()->installEventFilter(this);
     header()->setSectionResizeMode(QHeaderView::Interactive);
     header()->setStretchLastSection(false);
 
-    connect(header(), SIGNAL(sectionResized(int, int, int)), this, SLOT(sectionResized(int, int, int)));
-    connect(header(), SIGNAL(sectionMoved(int, int, int)), this, SLOT(sectionMoved(int, int, int)));
+    KrStyleProxy *style = new KrStyleProxy();
+    style->setParent(this);
+    setStyle(style);
+    viewport()->setStyle(style); // for custom tooltip delay
+
+    setItemDelegate(new KrViewItemDelegate(this));
+
+    connect(header(), SIGNAL(sectionResized(int,int,int)), this, SLOT(sectionResized(int,int,int)));
+    connect(header(), SIGNAL(sectionMoved(int,int,int)), this, SLOT(sectionMoved(int,int,int)));
 }
 
 KrInterDetailedView::~KrInterDetailedView()
@@ -346,10 +348,13 @@ void KrInterDetailedView::recalculateColumnSizes()
 bool KrInterDetailedView::viewportEvent(QEvent * event)
 {
     if (event->type() == QEvent::ToolTip) {
+        // only show tooltip if column is not wide enough to show all text. In this case the column
+        // data text is abbreviated and the full text is shown as tooltip, see ListModel::data().
+
         QHelpEvent *he = static_cast<QHelpEvent*>(event);
         const QModelIndex index = indexAt(he->pos());
-
-        if (index.isValid()) {
+        // name column has a detailed tooltip
+        if (index.isValid() && index.column() != KrViewProperties::Name) {
             int width = header()->sectionSize(index.column());
             QString text = index.data(Qt::DisplayRole).toString();
 
@@ -365,12 +370,30 @@ bool KrInterDetailedView::viewportEvent(QEvent * event)
             }
 
             if (textWidth <= width) {
+                QToolTip::hideText();
                 event->accept();
                 return true;
             }
         }
     }
     return QTreeView::viewportEvent(event);
+}
+
+void KrInterDetailedView::drawRow(QPainter *painter, const QStyleOptionViewItem &options,
+                                  const QModelIndex &index) const
+{
+    QTreeView::drawRow(painter, options, index);
+    // (always) draw dashed line border around current item row. This is done internally in
+    // QTreeView::drawRow() only when panel is focused, we have to repeat it here.
+    if (index == currentIndex()) {
+        QStyleOptionFocusRect o;
+        o.backgroundColor = options.palette.color(QPalette::Normal, QPalette::Background);
+
+        const QRect focusRect(0, options.rect.y(), header()->length(), options.rect.height());
+        o.rect = style()->visualRect(layoutDirection(), viewport()->rect(), focusRect);
+
+        style()->drawPrimitive(QStyle::PE_FrameFocusRect, &o, painter);
+    }
 }
 
 void KrInterDetailedView::setSortMode(KrViewProperties::ColumnType sortColumn, bool descending)
@@ -385,9 +408,9 @@ void KrInterDetailedView::setFileIconSize(int size)
     setIconSize(QSize(fileIconSize(), fileIconSize()));
 }
 
-QRect KrInterDetailedView::itemRect(const vfile *vf)
+QRect KrInterDetailedView::itemRect(const FileItem *item)
 {
-    QRect r = visualRect(_model->vfileIndex(vf));
+    QRect r = visualRect(_model->fileItemIndex(item));
     r.setLeft(0);
     r.setWidth(header()->length());
     return r;

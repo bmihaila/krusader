@@ -50,9 +50,6 @@ public:
     inline bool insertMovesDown() {
         return _insertMovesDown;
     }
-    inline bool spaceCalculatesDiskSpace() {
-        return _spaceCalculatesDiskSpace;
-    }
     inline bool rightButtonSelects() {
         return _rightButtonSelects;
     }
@@ -78,7 +75,7 @@ public:
     virtual ~KrSelectionMode() {}
 
 protected:
-    bool _useQTSelection, _spaceMovesDown, _insertMovesDown, _spaceCalculatesDiskSpace;
+    bool _useQTSelection, _spaceMovesDown, _insertMovesDown;
     bool _rightButtonSelects, _leftButtonSelects, _rightButtonPreservesSelection;
     bool _leftButtonPreservesSelection, _shiftCtrlRightButtonSelects, _shiftCtrlLeftButtonSelects;
     int _showContextMenu;
@@ -87,11 +84,10 @@ protected:
 class KonqSelectionMode : public KrSelectionMode
 {
 public:
-    void init() {
+    void init() Q_DECL_OVERRIDE {
         _useQTSelection = true;
         _spaceMovesDown = false;
         _insertMovesDown = true;
-        _spaceCalculatesDiskSpace = false;
         _rightButtonSelects = true;
         _leftButtonSelects = true;
         _rightButtonPreservesSelection = false;
@@ -105,11 +101,10 @@ public:
 class OriginalSelectionMode : public KrSelectionMode
 {
 public:
-    void init() {
+    void init() Q_DECL_OVERRIDE {
         _useQTSelection = false;
         _spaceMovesDown = true;
         _insertMovesDown = true;
-        _spaceCalculatesDiskSpace = true;
         _rightButtonSelects = true;
         _leftButtonSelects = true;
         _rightButtonPreservesSelection = false;
@@ -123,11 +118,10 @@ public:
 class TCSelectionMode : public KrSelectionMode
 {
 public:
-    void init() {
+    void init() Q_DECL_OVERRIDE {
         _useQTSelection = false;
         _spaceMovesDown = false;
         _insertMovesDown = true;
-        _spaceCalculatesDiskSpace = true;
         _rightButtonSelects = true;
         _leftButtonSelects = false;
         _rightButtonPreservesSelection = true;
@@ -141,11 +135,10 @@ public:
 class ErgonomicSelectionMode : public KrSelectionMode
 {
 public:
-    void init() {
+    void init() Q_DECL_OVERRIDE {
         _useQTSelection = false;
         _spaceMovesDown = false;
         _insertMovesDown = true;
-        _spaceCalculatesDiskSpace = true;
         _rightButtonSelects = false;
         _leftButtonSelects = false;
         _rightButtonPreservesSelection = true;
@@ -159,7 +152,7 @@ public:
 class UserSelectionMode: public KrSelectionMode
 {
 public:
-    void init();
+    void init() Q_DECL_OVERRIDE;
 };
 
 #endif // KR_SELECTION_MODE_H

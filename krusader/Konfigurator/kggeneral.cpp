@@ -243,8 +243,8 @@ void KgGeneral::createGeneralTab()
     KonfiguratorURLRequester *urlReq3 = createURLRequester("General", "Temp Directory", _TempDirectory,
                                         generalGrp, false, PAGE_GENERAL);
     urlReq3->setMode(KFile::Directory);
-    connect(urlReq3->extension(), SIGNAL(applyManually(QObject *, QString, QString)),
-            this, SLOT(applyTempDir(QObject *, QString, QString)));
+    connect(urlReq3->extension(), SIGNAL(applyManually(QObject*,QString,QString)),
+            this, SLOT(applyTempDir(QObject*,QString,QString)));
     hbox->addWidget(urlReq3);
     generalGrid->addLayout(hbox, 13, 0, 1, 1);
 
@@ -278,7 +278,7 @@ void KgGeneral::createGeneralTab()
     QGroupBox *terminalGrp = createFrame(i18n("Terminal"), tab);
     QGridLayout *terminalGrid = createGridLayout(terminalGrp);
 
-    QLabel *label3 = new QLabel(i18n("Terminal:"), generalGrp);
+    QLabel *label3 = new QLabel(i18n("External Terminal:"), generalGrp);
     terminalGrid->addWidget(label3, 0, 0);
     KonfiguratorURLRequester *urlReq2 = createURLRequester("General", "Terminal", _Terminal,
                                         generalGrp, false, PAGE_GENERAL, false);
@@ -288,22 +288,21 @@ void KgGeneral::createGeneralTab()
     terminalGrid->addWidget(terminalLabel, 1, 1);
 
     KONFIGURATOR_CHECKBOX_PARAM terminal_settings[] = { //   cfg_class  cfg_name     default        text            restart tooltip
-        {"General", "Send CDs", _SendCDs, i18n("Terminal Emulator sends Chdir on panel change"), false, i18n("When checked, whenever the panel is changed (for example, by pressing Tab), Krusader changes the current folder in the terminal emulator.") },
-        {"Look&Feel", "Fullscreen Terminal Emulator", false, i18n("Fullscreen terminal (mc-style)"), false,  i18n("Terminal is shown instead of the Krusader window (full screen).") },
+        {"General", "Send CDs", _SendCDs, i18n("Embedded Terminal sends Chdir on panel change"), false, i18n("When checked, whenever the panel is changed (for example, by pressing Tab), Krusader changes the current folder in the embedded terminal.") },
     };
-    cbs = createCheckBoxGroup(1, 0, terminal_settings, 2 /*count*/, terminalGrp, PAGE_GENERAL);
+    cbs = createCheckBoxGroup(1, 0, terminal_settings, 1 /*count*/, terminalGrp, PAGE_GENERAL);
     terminalGrid->addWidget(cbs, 2, 0, 1, 2);
 
 
     kgGeneralLayout->addWidget(terminalGrp, 2 , 0);
 }
 
-void KgGeneral::applyTempDir(QObject *obj, QString cls, QString name)
+void KgGeneral::applyTempDir(QObject *obj, QString configGroup, QString name)
 {
     KonfiguratorURLRequester *urlReq = (KonfiguratorURLRequester *)obj;
     QString value = urlReq->url().toDisplayString(QUrl::PreferLocalFile);
 
-    KConfigGroup(krConfig, cls).writeEntry(name, value);
+    KConfigGroup(krConfig, configGroup).writeEntry(name, value);
 }
 
 void KgGeneral::slotFindTools()

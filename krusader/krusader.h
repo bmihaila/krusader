@@ -66,7 +66,6 @@ class KStartupInfoId;
 
 class KrusaderStatus;
 class KRPleaseWaitHandler;
-class UserMenu;
 class PopularUrls;
 class ViewActions;
 class ListPanelActions;
@@ -82,7 +81,7 @@ class Krusader : public KParts::MainWindow, public KrMainWindow
     Q_CLASSINFO("D-Bus Interface", "org.krusader.Instance")
 
 public:
-    Krusader(const QCommandLineParser &parser);
+    explicit Krusader(const QCommandLineParser &parser);
     virtual ~Krusader();
 
     // KrMainWindow implementation
@@ -123,7 +122,7 @@ public:
 
 public slots:
     void moveToTop();
-    void statusBarUpdate(QString& mess);
+    void statusBarUpdate(const QString& mess);
     // in use by Krusader only
     void saveSettings();
     void savePosition();
@@ -151,17 +150,12 @@ public:
     static Krusader *App;       // a kApp style pointer
     static QString   AppName;   // the name of the application
     PopularUrls *_popularUrls; // holds a sorted list of the most popular urls visited
-    // return a path to a temp dir or file we can use.
-    QString getTempDir();
-    QString getTempFile();
 
     // the internal progress bar variales + functions
     KRPleaseWaitHandler* plzWait;
     void startWaiting(QString msg = "Please Wait", int count = 0 , bool cancel = false);
     void stopWait();
     bool wasWaitingCancelled() const;
-
-    static UserMenu *userMenu;
 
 #ifdef __KJSEMBED__
     static KrJS *js;

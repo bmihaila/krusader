@@ -20,7 +20,7 @@
 #include "dirhistorybutton.h"
 #include "../Panel/dirhistoryqueue.h"
 
-#include "../VFS/vfs.h"
+#include "../FileSystem/filesystem.h"
 
 // QtCore
 #include <QDebug>
@@ -49,7 +49,7 @@ DirHistoryButton::DirHistoryButton(DirHistoryQueue* hQ, QWidget *parent) : QTool
     historyQueue = hQ;
 
     connect(popupMenu, SIGNAL(aboutToShow()), this, SLOT(slotAboutToShow()));
-    connect(popupMenu, SIGNAL(triggered(QAction *)), this, SLOT(slotPopupActivated(QAction *)));
+    connect(popupMenu, SIGNAL(triggered(QAction*)), this, SLOT(slotPopupActivated(QAction*)));
 }
 
 DirHistoryButton::~DirHistoryButton() {}

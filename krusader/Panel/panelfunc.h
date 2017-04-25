@@ -33,18 +33,21 @@
 #ifndef PANELFUNC_H
 #define PANELFUNC_H
 
-#include "krviewitem.h"
-#include "../VFS/vfs.h"
-
 // QtCore
 #include <QObject>
 #include <QTimer>
+#include <QUrl>
 // QtGui
 #include <QClipboard>
 
+#include <KCoreAddons/KJob>
+#include <KIO/Global>
 #include <KService/KService>
 
 class DirHistoryQueue;
+class FileItem;
+class FileSystem;
+class KrViewItem;
 class ListPanel;
 
 class ListPanelFunc : public QObject
@@ -54,11 +57,8 @@ class ListPanelFunc : public QObject
 public slots:
     void execute(const QString&);
     void goInside(const QString&);
-    void navigatorUrlChanged(const QUrl &url);
     void openUrl(const QUrl &path, const QString& nameToMakeCurrent = QString(),
                  bool manuallyEntered = false);
-//     void popErronousUrl();
-    void immediateOpenUrl(const QUrl &url, bool disableLock = false);
     void rename(const QString &oldname, const QString &newname);
 
     // actions
@@ -76,16 +76,18 @@ public slots:
     void viewDlg();
     void edit();
     void editNew(); // create a new textfile and edit it
-    void moveFilesByQueue(); // start in queue regardless of _queueMode state
-    void copyFilesByQueue(); // start in queue regardless of _queueMode state
-    void moveFiles(bool reverseQueueMode = false) { copyFiles(reverseQueueMode, true); }
-    void copyFiles(bool reverseQueueMode = false, bool move = false);
+    void moveFilesDelayed() { moveFiles(true); }
+    void copyFilesDelayed() { copyFiles(true); }
+    void moveFiles(bool enqueue = false) { copyFiles(enqueue, true); }
+    void copyFiles(bool enqueue = false, bool move = false);
 
     /*!
      * asks the user the new directory name
      */
     void mkdir();
-    void deleteFiles(bool reallyDelete = false);
+    void defaultDeleteFiles(bool invert = false);
+    // delete virtual files or directories in virtual filesystem
+    void removeVirtualFiles();
     void rename();
     void krlink(bool sym = true);
     void createChecksum();
@@ -93,8 +95,8 @@ public slots:
     void pack();
     void unpack();
     void testArchive();
-    // Calculate the occupied space of an item or the currently selected item and show it in a dialog
-    void calcSpace(KrViewItem *item = 0);
+    /** Calculate the occupied space of the currently selected items and show a dialog. */
+    void calcSpace();
     void properties();
     void cut() {
         copyToClipboard(true);
@@ -102,50 +104,51 @@ public slots:
     void copyToClipboard(bool move = false);
     void pasteFromClipboard();
     void syncOtherPanel();
+    /** Disable refresh if panel is not visible. */
+    void setPaused(bool paused);
 
 public:
-    ListPanelFunc(ListPanel *parent);
+    explicit ListPanelFunc(ListPanel *parent);
     ~ListPanelFunc();
 
-    vfs* files();  // return a pointer to the vfs
+    FileSystem* files();  // return a pointer to the filesystem
+    QUrl virtualDirectory(); // return the current URL (simulated when panel is paused)
 
-    inline vfile* getVFile(KrViewItem *item) {
-        return files()->getVfile(item->name());
-    }
-    inline vfile* getVFile(const QString& name) {
-        return files()->getVfile(name);
-    }
+    FileItem* getFileItem(KrViewItem *item);
+    FileItem* getFileItem(const QString& name);
 
     void refreshActions();
     void redirectLink();
     void runService(const KService &service, QList<QUrl> urls);
     void displayOpenWithDialog(QList<QUrl> urls);
     QUrl browsableArchivePath(const QString &);
+    void deleteFiles(bool moveToTrash);
 
     ListPanelFunc* otherFunc();
     bool atHome();
-    bool ignoreVFSErrors() { return _ignoreVFSErrors; }
 
 protected slots:
-    // Load the current url from history and refresh vfs and panel to it. If this fails, try the
-    // next url in history until success (last try is root)
+    // Load the current url from history and refresh filesystem and panel to it
     void doRefresh();
     void slotFileCreated(KJob *job); // a file has been created by editNewFile()
     void historyGotoPos(int pos);
     void clipboardChanged(QClipboard::Mode mode);
+    // Update the directory size in view
+    void slotSizeCalculated(const QUrl &url, KIO::filesize_t size);
 
 protected:
     QUrl cleanPath(const QUrl &url);
     bool isSyncing(const QUrl &url);
     // when externallyExecutable == true, the file can be executed or opened with other software
     void openFileNameInternal(const QString &name, bool externallyExecutable);
+    void immediateOpenUrl(const QUrl &url);
     void openUrlInternal(const QUrl &url, const QString& makeCurrent,
-                         bool immediately, bool disableLock, bool manuallyEntered);
+                         bool immediately, bool manuallyEntered);
     void runCommand(QString cmd);
 
     ListPanel*           panel;     // our ListPanel
     DirHistoryQueue*     history;
-    vfs*                 vfsP;      // pointer to vfs.
+    FileSystem*          fileSystemP;      // pointer to fileSystem.
     QTimer               delayTimer;
     QUrl                 syncURL;
     QUrl                 fileToCreate; // file that's to be created by editNewFile()
@@ -154,8 +157,9 @@ protected:
     static QPointer<ListPanelFunc> copyToClipboardOrigin;
 
 private:
-    bool _refreshing; // ignore url changes while refreshing
-    bool _ignoreVFSErrors; // ignore (repeated) errors emitted by vfs;
+    bool getSelectedFiles(QStringList& args);
+    bool _isPaused; // do not refresh while panel is not visible
+    bool _refreshAfterPaused; // refresh after not paused anymore
 };
 
 #endif
