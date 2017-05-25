@@ -89,6 +89,7 @@ YP   YD 88   YD ~Y8888P' `8888Y' YP   YP Y8888D' Y88888P 88   YD
 #include "../BookMan/krbookmarkbutton.h"
 #include "../FileSystem/filesystem.h"
 #include "../FileSystem/krpermhandler.h"
+#include "../FileSystem/sizecalculator.h"
 #include "../Dialogs/krdialogs.h"
 #include "../Dialogs/krspwidgets.h"
 #include "../Dialogs/krsqueezedtextlabel.h"
@@ -239,17 +240,27 @@ ListPanel::ListPanel(QWidget *parent, AbstractPanelManager *manager, KConfigGrou
     freeSpace->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     ADD_WIDGET(freeSpace);
 
+    // progress indicator and cancel button for the quick calc size
+    quickSizeCalcProgress = new QProgressBar(this);
+    quickSizeCalcProgress->hide();
+    ADD_WIDGET(quickSizeCalcProgress);
+    cancelQuickSizeCalcButton = new QToolButton(this);
+    cancelQuickSizeCalcButton->hide();
+    cancelQuickSizeCalcButton->setIcon(krLoader->loadIcon("dialog-cancel", KIconLoader::Toolbar, 16));
+    cancelQuickSizeCalcButton->setToolTip(i18n("Cancel directory space calculation"));
+    ADD_WIDGET(cancelQuickSizeCalcButton);
+
     // progress indicator for the preview job
     previewProgress = new QProgressBar(this);
     previewProgress->hide();
     ADD_WIDGET(previewProgress);
 
-    // a cancel button for the inplace refresh mechanism
-    inlineRefreshCancelButton = new QToolButton(this);
-    inlineRefreshCancelButton->hide();
-    inlineRefreshCancelButton->setIcon(krLoader->loadIcon("dialog-cancel", KIconLoader::Toolbar, 16));
-    connect(inlineRefreshCancelButton, SIGNAL(clicked()), this, SLOT(inlineRefreshCancel()));
-    ADD_WIDGET(inlineRefreshCancelButton);
+    // a cancel button for the filesystem refresh and preview job
+    cancelProgressButton = new QToolButton(this);
+    cancelProgressButton->hide();
+    cancelProgressButton->setIcon(krLoader->loadIcon("dialog-cancel", KIconLoader::Toolbar, 16));
+    connect(cancelProgressButton, SIGNAL(clicked()), this, SLOT(cancelProgress()));
+    ADD_WIDGET(cancelProgressButton);
 
     // button for changing the panel popup position in the panel
     popupPositionBtn = new QToolButton(this);
@@ -347,8 +358,10 @@ ListPanel::ListPanel(QWidget *parent, AbstractPanelManager *manager, KConfigGrou
         h->setSpacing(0);
         h->addWidget(totals);
         h->addWidget(freeSpace);
+        h->addWidget(quickSizeCalcProgress);
+        h->addWidget(cancelQuickSizeCalcButton);
         h->addWidget(previewProgress);
-        h->addWidget(inlineRefreshCancelButton);
+        h->addWidget(cancelProgressButton);
         h->addWidget(popupBtn);
         v->addLayout(h);
 
@@ -358,12 +371,12 @@ ListPanel::ListPanel(QWidget *parent, AbstractPanelManager *manager, KConfigGrou
     setLayout(layout);
 
     connect(&KrColorCache::getColorCache(), SIGNAL(colorsRefreshed()), this, SLOT(refreshColors()));
-    connect(krApp, SIGNAL(shutdown()), SLOT(inlineRefreshCancel()));
+    connect(krApp, SIGNAL(shutdown()), SLOT(cancelProgress()));
 }
 
 ListPanel::~ListPanel()
 {
-    inlineRefreshCancel();
+    cancelProgress();
     delete view;
     view = 0;
     delete func;
@@ -416,6 +429,7 @@ void ListPanel::createView()
 
     view->widget()->installEventFilter(this);
 
+    connect(view->op(), &KrViewOperator::quickCalcSpace, func, &ListPanelFunc::quickCalcSpace);
     connect(view->op(), SIGNAL(goHome()), func, SLOT(home()));
     connect(view->op(), SIGNAL(dirUp()), func, SLOT(dirUp()));
     connect(view->op(), &KrViewOperator::defaultDeleteFiles, func, &ListPanelFunc::defaultDeleteFiles);
@@ -700,7 +714,6 @@ void ListPanel::slotFocusOnMe(bool focus)
 
     urlNavigator->setActive(focus);
     refreshColors();
-    emit refreshPathLabel();
 
     krApp->setUpdatesEnabled(true);
 }
@@ -883,13 +896,16 @@ void ListPanel::keyPressEvent(QKeyEvent *e)
     case Qt::Key_Return :
         if (e->modifiers() & Qt::ControlModifier) {
             if (e->modifiers() & Qt::AltModifier) {
-                FileItem *fileitem = func->files()->getFileItem(view->getCurrentKrViewItem()->name());
+                FileItem *fileitem =
+                    func->files()->getFileItem(view->getCurrentKrViewItem()->name());
                 if (fileitem && fileitem->isDir())
                     newTab(fileitem->getUrl(), true);
             } else {
-                SLOTS->insertFileName((e->modifiers()&Qt::ShiftModifier)!=0);
+                SLOTS->insertFileName((e->modifiers() & Qt::ShiftModifier) != 0);
             }
-        } else e->ignore();
+        } else {
+            e->ignore();
+        }
         break;
     case Qt::Key_Right :
     case Qt::Key_Left :
@@ -946,7 +962,7 @@ void ListPanel::keyPressEvent(QKeyEvent *e)
         break;
 
     case Qt::Key_Escape:
-        inlineRefreshCancel();
+        cancelProgress();
         break;
 
     default:
@@ -986,11 +1002,11 @@ void ListPanel::slotPreviewJobStarted(KJob *job)
     previewJob = job;
     connect(job, SIGNAL(percent(KJob*,ulong)), SLOT(slotPreviewJobPercent(KJob*,ulong)));
     connect(job, &KJob::result, this, &ListPanel::slotPreviewJobResult);
-    inlineRefreshCancelButton->setMaximumHeight(popupBtn->height());
-    inlineRefreshCancelButton->show();
+    cancelProgressButton->setMaximumHeight(popupBtn->height());
+    cancelProgressButton->show();
     previewProgress->setValue(0);
     previewProgress->setFormat(i18n("loading previews: %p%"));
-    previewProgress->setMaximumHeight(inlineRefreshCancelButton->height());
+    previewProgress->setMaximumHeight(cancelProgressButton->height());
     previewProgress->show();
 }
 
@@ -1004,10 +1020,10 @@ void ListPanel::slotPreviewJobResult(KJob* /*job*/)
     previewJob = 0;
     previewProgress->hide();
     if(!inlineRefreshJob)
-        inlineRefreshCancelButton->hide();
+        cancelProgressButton->hide();
 }
 
-void ListPanel::slotJobStarted(KIO::Job* job)
+void ListPanel::slotRefreshJobStarted(KIO::Job* job)
 {
     // disable the parts of the panel we don't want touched
     status->setEnabled(false);
@@ -1034,10 +1050,10 @@ void ListPanel::slotJobStarted(KIO::Job* job)
     inlineRefreshJob = job;
 
     totals->setText(i18n(">> Reading..."));
-    inlineRefreshCancelButton->show();
+    cancelProgressButton->show();
 }
 
-void ListPanel::inlineRefreshCancel()
+void ListPanel::cancelProgress()
 {
     if (inlineRefreshJob) {
         disconnect(inlineRefreshJob, 0, this, 0);
@@ -1088,7 +1104,7 @@ void ListPanel::inlineRefreshListResult(KJob*)
     syncBrowseButton->setEnabled(true);
 
     if(!previewJob)
-        inlineRefreshCancelButton->hide();
+        cancelProgressButton->hide();
 }
 
 void ListPanel::jumpBack()
@@ -1189,12 +1205,14 @@ void ListPanel::saveSettings(KConfigGroup cfg, bool saveHistory)
 void ListPanel::restoreSettings(KConfigGroup cfg)
 {
     changeType(cfg.readEntry("Type", defaultPanelType()));
-
-    setProperties(cfg.readEntry("Properties", 0));
     view->restoreSettings(KConfigGroup(&cfg, "View"));
 
-    _lastLocalPath = ROOT_DIR;
+    // "locked" property must be set after URL path is restored!
+    // This panel can be reused when loading a profile,
+    // so we reset its properties before calling openUrl().
+    setProperties(0);
 
+    _lastLocalPath = ROOT_DIR;
     if(func->history->restore(KConfigGroup(&cfg, "History"))) {
         func->refresh();
     } else {
@@ -1205,6 +1223,8 @@ void ListPanel::restoreSettings(KConfigGroup cfg)
     }
 
     setJumpBack(func->history->currentUrl());
+
+    setProperties(cfg.readEntry("Properties", 0));
 
     if (cfg.hasKey("PopupPosition")) { // popup was visible, restore
         togglePanelPopup(); // create and show
@@ -1315,4 +1335,19 @@ void ListPanel::setPopupPosition(int pos)
     if ((pos < 2) != (qobject_cast<PanelPopup*>(splt->widget(0)) != NULL)) {
         splt->insertWidget(0, splt->widget(1)); // swapping widgets in splitter
     }
+}
+
+void ListPanel::connectQuickSizeCalculator(SizeCalculator *sizeCalculator)
+{
+    connect(sizeCalculator, &SizeCalculator::started, this, [=]() {
+        quickSizeCalcProgress->reset();
+        quickSizeCalcProgress->show();
+        cancelQuickSizeCalcButton->show();
+    });
+    connect(cancelQuickSizeCalcButton, &QToolButton::clicked, sizeCalculator, &SizeCalculator::cancel);
+    connect(sizeCalculator, &SizeCalculator::progressChanged, quickSizeCalcProgress, &QProgressBar::setValue);
+    connect(sizeCalculator, &SizeCalculator::finished, this, [=]() {
+        cancelQuickSizeCalcButton->hide();
+        quickSizeCalcProgress->hide();
+    });
 }

@@ -71,18 +71,6 @@ FileItem *FileSystem::getFileItem(const QString &name) const
     return _fileItems.contains(name) ? _fileItems.value(name) : 0;
 }
 
-QList<FileItem *> FileSystem::searchFileItems(const KRQuery &filter)
-{
-    QList<FileItem *> result;
-    for (FileItem *item : _fileItems.values()) {
-        if (filter.match(item)) {
-            result.append(item);
-        }
-    }
-
-    return result;
-}
-
 KIO::filesize_t FileSystem::totalSize() const
 {
     KIO::filesize_t temp = 0;
@@ -117,7 +105,6 @@ QUrl FileSystem::preferLocalUrl(const QUrl &url){
 
 bool FileSystem::refresh(const QUrl &directory)
 {
-
     if (_isRefreshing) {
         // NOTE: this does not happen (unless async)";
         return false;

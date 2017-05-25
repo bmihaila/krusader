@@ -66,7 +66,8 @@ KrusaderView::KrusaderView(QWidget *parent) : QWidget(parent),
 {
 }
 
-void KrusaderView::start(KConfigGroup &cfg, bool restoreSettings, const QList<QUrl> &leftTabs, const QList<QUrl> &rightTabs)
+void KrusaderView::start(const KConfigGroup &cfg, bool restoreSettings,
+                         const QList<QUrl> &leftTabs, const QList<QUrl> &rightTabs)
 {
     ////////////////////////////////
     // make a 1x1 mainLayout, it will auto-expand:
@@ -421,7 +422,7 @@ bool KrusaderView::isTerminalEmulatorFullscreen() {
 
 void KrusaderView::profiles(QString profileName)
 {
-    ProfileManager profileManager("Panel");
+    ProfileManager profileManager("Panel", this);
     profileManager.hide();
     connect(&profileManager, SIGNAL(saveToProfile(QString)), this, SLOT(savePanelProfiles(QString)));
     connect(&profileManager, SIGNAL(loadFromProfile(QString)), this, SLOT(loadPanelProfiles(QString)));

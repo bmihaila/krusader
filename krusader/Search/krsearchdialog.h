@@ -35,22 +35,23 @@
 #include <QString>
 #include <QStringList>
 // QtWidgets
+#include <QCheckBox>
 #include <QDialog>
+#include <QLabel>
+#include <QTabWidget>
 
-#include "krsearchmod.h"
-
-
-class QLabel;
-class SearchResultContainer;
-class KrView;
-class KrViewItem;
-class ProfileManager;
+class FileItem;
 class FilterTabs;
 class GeneralFilter;
-class QTabWidget;
-class KSqueezedTextLabel;
-class KrSqueezedTextLabel;
 class KrSearchBar;
+class KrSqueezedTextLabel;
+class KrView;
+class KrViewItem;
+class KRQuery;
+class KRSearchMod;
+class KSqueezedTextLabel;
+class ProfileManager;
+class SearchResultContainer;
 
 class KrSearchDialog : public QDialog
 {
@@ -87,8 +88,16 @@ private:
     void viewCurrent();
     void compareByContent();
 
+    /**
+     * Placing search query to clipboard is optional (opt-in).
+     * So user has clipboard untact by default when opening found documents,
+     * but can enable it persistently by checking "Query to clipboard" checkbox.
+     */
+    void tryPlaceSearchQueryToClipboard();
+
 private:
     ProfileManager *profileManager;
+    QCheckBox *searchTextToClipboard;
 
     FilterTabs * filterTabs;
     GeneralFilter * generalFilter;

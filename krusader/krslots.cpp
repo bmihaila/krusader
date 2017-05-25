@@ -273,14 +273,14 @@ void KRslots::toggleTerminal()
     MAIN_VIEW->setTerminalEmulator(KrActions::actToggleTerminal->isChecked());
 }
 
-void KRslots::insertFileName(bool full_path)
+void KRslots::insertFileName(bool fullPath)
 {
     QString filename = ACTIVE_VIEW->getCurrentItem();
     if (filename.isEmpty()) {
         return;
     }
 
-    if (full_path) {
+    if (fullPath) {
         const QString path = FileSystem::ensureTrailingSlash(ACTIVE_PANEL->virtualPath())
                                  .toDisplayString(QUrl::PreferLocalFile);
         filename = path + filename;
@@ -295,7 +295,7 @@ void KRslots::insertFileName(bool full_path)
         MAIN_VIEW->cmdLine()->setText(current + filename);
         MAIN_VIEW->cmdLine()->setFocus();
     } else if (MAIN_VIEW->terminalDock()->isTerminalVisible()) {
-        filename = QChar(' ') + filename + QChar(' ');
+        filename = ' ' + filename + ' ';
         MAIN_VIEW->terminalDock()->sendInput(filename, false);
         MAIN_VIEW->terminalDock()->setFocus();
     }
@@ -338,10 +338,13 @@ void KRslots::configChanged(bool isGUIRestartNeeded)
         krApp->setUpdatesEnabled(true);
     }
 
+    krApp->setTray();
+
     // really ugly, but reload the Fn keys just in case - csaba: any better idea?
     MAIN_VIEW->fnKeys()->updateShortcuts();
 
-    bool showHidden = KConfigGroup(krConfig, "Look&Feel").readEntry("Show Hidden", KrActions::actToggleHidden->isChecked());
+    const bool showHidden = KConfigGroup(krConfig, "Look&Feel")
+                                .readEntry("Show Hidden", KrActions::actToggleHidden->isChecked());
 
     if (showHidden != KrActions::actToggleHidden->isChecked()) {
         KrActions::actToggleHidden->setChecked(showHidden);

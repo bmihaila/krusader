@@ -387,9 +387,10 @@ void KgPanel::setupPanelTab()
         {"Look&Feel", "Show Hidden",                    _ShowHidden,             i18n("Show hidden files"),      false,  i18n("Display files beginning with a dot.") },
         {"Look&Feel", "Numeric permissions",            _NumericPermissions,     i18n("Numeric Permissions"), true,  i18n("Show octal numbers (0755) instead of the standard permissions (rwxr-xr-x) in the permission column.") },
         {"Look&Feel", "Load User Defined Folder Icons", _UserDefinedFolderIcons, i18n("Load the user defined folder icons"), true ,  i18n("Load the user defined folder icons (can cause decrease in performance).") },
+        {"Look&Feel", "Always Show Current Item",       _AlwaysShowCurrentItem,  i18n("Always show current item"), false,  i18n("Show current item border decoration in inactive panel.") },
     };
 
-    KonfiguratorCheckBoxGroup *panelSett = createCheckBoxGroup(2, 0, panelSettings, 4 /*count*/, panelGrp, PAGE_VIEW);
+    KonfiguratorCheckBoxGroup *panelSett = createCheckBoxGroup(2, 0, panelSettings, 5 /*count*/, panelGrp, PAGE_VIEW);
 
     panelGrid->addWidget(panelSett, 3, 0, 1, 2);
 
@@ -614,6 +615,9 @@ void KgPanel::setupMouseModeTab()
         {"Custom Selection Mode",  "Space Moves Down",  _SpaceMovesDown,
          i18n("Spacebar moves down"), true,
          i18n("If checked, pressing the spacebar will select the current item and move down.\nOtherwise, current item is selected, but remains the current item.") },
+        {"Custom Selection Mode",  "Space Calc Space",  _SpaceCalcSpace,
+         i18n("Spacebar calculates disk space"), true,
+         i18n("If checked, pressing the spacebar while the current item is a folder, will (except from selecting the folder)\ncalculate space occupied of the folder (recursively).") },
         {"Custom Selection Mode",  "Insert Moves Down",  _InsertMovesDown,
          i18n("Insert moves down"), true,
          i18n("If checked, pressing Insert will select the current item, and move down to the next item.\nOtherwise, current item is not changed.") },
@@ -623,7 +627,7 @@ void KgPanel::setupMouseModeTab()
     };
 
 
-    mouseCheckboxes = createCheckBoxGroup(1, 0, mouseCheckboxesParam, 10 /*count*/, mouseDetailGroup, PAGE_MOUSE);
+    mouseCheckboxes = createCheckBoxGroup(1, 0, mouseCheckboxesParam, 11 /*count*/, mouseDetailGroup, PAGE_MOUSE);
     mouseDetailGrid->addWidget(mouseCheckboxes, 1, 0);
 
     for (int i = 0; i < mouseCheckboxes->count(); i++)
@@ -723,6 +727,7 @@ void KgPanel::slotSelectionModeChanged()
     mouseCheckboxes->find("Right Preserves")->setChecked(selectionMode->rightButtonPreservesSelection());
     mouseCheckboxes->find("ShiftCtrl Right Selects")->setChecked(selectionMode->shiftCtrlRightButtonSelects());
     mouseCheckboxes->find("Space Moves Down")->setChecked(selectionMode->spaceMovesDown());
+    mouseCheckboxes->find("Space Calc Space")->setChecked(selectionMode->spaceCalculatesDiskSpace());
     mouseCheckboxes->find("Insert Moves Down")->setChecked(selectionMode->insertMovesDown());
     mouseCheckboxes->find("Immediate Context Menu")->setChecked(selectionMode->showContextMenu() == -1);
 }

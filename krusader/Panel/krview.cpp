@@ -652,6 +652,10 @@ bool KrView::handleKeyEvent(QKeyEvent *e)
         if (viewItem != 0) {
             viewItem->setSelected(!viewItem->isSelected());
 
+            if (viewItem->getFileItem()->isDir() &&
+                KrSelectionMode::getSelectionHandler()->spaceCalculatesDiskSpace()) {
+                op()->emitQuickCalcSpace(viewItem);
+            }
             if (KrSelectionMode::getSelectionHandler()->spaceMovesDown()) {
                 KrViewItem * next = getNext(viewItem);
                 if (next) {
@@ -918,7 +922,14 @@ void KrView::sortModeUpdated(KrViewProperties::ColumnType sortColumn, bool desce
     _properties->sortColumn = sortColumn;
     _properties->sortOptions = static_cast<KrViewProperties::SortOptions>(options);
 
-//     op()->settingsChanged(KrViewProperties::PropSortMode);
+    //     op()->settingsChanged(KrViewProperties::PropSortMode);
+}
+
+bool KrView::drawCurrent() const
+{
+    return isFocused() ||
+           KConfigGroup(_config, "Look&Feel")
+               .readEntry("Always Show Current Item", _AlwaysShowCurrentItem);
 }
 
 void KrView::saveSortMode(KConfigGroup &group)
