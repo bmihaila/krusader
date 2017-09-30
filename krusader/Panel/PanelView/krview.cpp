@@ -30,21 +30,22 @@
 
 #include "krview.h"
 
-#include "viewactions.h"
+#include "krselectionmode.h"
 #include "krviewfactory.h"
 #include "krviewitem.h"
-#include "krselectionmode.h"
-#include "krcolorcache.h"
-#include "krpreviews.h"
-#include "../kicons.h"
-#include "../krglobal.h"
-#include "../defaults.h"
 #include "../FileSystem/dirlisterinterface.h"
 #include "../FileSystem/fileitem.h"
 #include "../FileSystem/krpermhandler.h"
 #include "../Filter/filterdialog.h"
+#include "../defaults.h"
+#include "../kicons.h"
+#include "../krcolorcache.h"
+#include "../krglobal.h"
+#include "../krpreviews.h"
+#include "../viewactions.h"
 
 // QtCore
+#include <QDebug>
 #include <QDir>
 // QtGui
 #include <QPixmapCache>
@@ -97,9 +98,9 @@ void KrViewOperator::fileAdded(FileItem *fileitem)
     _view->addItem(fileitem);
 }
 
-void KrViewOperator::fileUpdated(FileItem *fileitem)
+void KrViewOperator::fileUpdated(FileItem *newFileitem)
 {
-    _view->updateItem(fileitem);
+    _view->updateItem(newFileitem);
 }
 
 void KrViewOperator::startDrag()
@@ -390,14 +391,15 @@ void KrView::getItemsByMask(QString mask, QStringList* names, bool dirs, bool fi
  * this function ADDs a list of selected item names into 'names'.
  * it assumes the list is ready and doesn't initialize it, or clears it
  */
-void KrView::getSelectedItems(QStringList *names, bool ignoreJustFocused)
+void KrView::getSelectedItems(QStringList *names, bool fallbackToFocused)
 {
-    for (KrViewItem * it = getFirst(); it != 0; it = getNext(it))
-        if (it->isSelected() && (it->name() != "..")) names->append(it->name());
+    for (KrViewItem *it = getFirst(); it != 0; it = getNext(it))
+        if (it->isSelected() && (it->name() != ".."))
+            names->append(it->name());
 
-    // if all else fails, take the current item
-    if (!ignoreJustFocused) {
-        QString item = getCurrentItem();
+    if (fallbackToFocused) {
+        // if all else fails, take the current item
+        const QString item = getCurrentItem();
         if (names->empty() && !item.isEmpty() && item != "..") {
             names->append(item);
         }
@@ -583,15 +585,30 @@ void KrView::addItem(FileItem *fileitem)
     op()->emitSelectionChanged();
 }
 
-void KrView::updateItem(FileItem *fileitem)
+void KrView::updateItem(FileItem *newFileItem)
 {
-    if (isFiltered(fileitem))
-        delItem(fileitem->getName());
-    else {
-        preUpdateItem(fileitem);
+    // file name did not change
+    const QString name = newFileItem->getName();
+
+    // preserve 'current' and 'selection'
+    const bool isCurrent = getCurrentItem() == name;
+    QStringList selectedNames;
+    getSelectedItems(&selectedNames, false);
+    const bool isSelected = selectedNames.contains(name);
+
+    // delete old file item
+    delItem(name);
+
+    if (!isFiltered(newFileItem)) {
+        addItem(newFileItem);
         if(_previews)
-            _previews->updatePreview(findItemByFileItem(fileitem));
+            _previews->updatePreview(findItemByFileItem(newFileItem));
     }
+
+    if (isCurrent)
+        setCurrentItem(name);
+    if (isSelected)
+        setSelected(newFileItem, true);
 
     op()->emitSelectionChanged();
 }
@@ -608,6 +625,7 @@ void KrView::clear()
 
 bool KrView::handleKeyEvent(QKeyEvent *e)
 {
+    qDebug() << "key event=" << e;
     switch (e->key()) {
     case Qt::Key_Enter :
     case Qt::Key_Return : {
@@ -629,8 +647,10 @@ bool KrView::handleKeyEvent(QKeyEvent *e)
             op()->emitGoHome(); // ask krusader to move to the home directory
         }
         return true;
-    case Qt::Key_Delete : // delete/trash the file
-        op()->emitDefaultDeleteFiles(e->modifiers() == Qt::ShiftModifier || e->modifiers() == Qt::ControlModifier);
+    case Qt::Key_Delete : // delete/trash the file (delete with alternative mode is a panel action)
+        if (e->modifiers() == Qt::NoModifier) {
+            op()->emitDefaultDeleteFiles();
+        }
         return true;
     case Qt::Key_Insert: {
         KrViewItem * i = getCurrentKrViewItem();
@@ -804,13 +824,13 @@ bool KrView::handleKeyEvent(QKeyEvent *e)
         e->ignore();
         return true; // otherwise the selection gets lost??!??
                      // also it is needed by the panel
-    case Qt::Key_A :                 // mark all
+    case Qt::Key_A : // mark all
         if (e->modifiers() == Qt::ControlModifier) {
             //FIXME: shouldn't there also be a shortcut for unselecting everything ?
             selectAllIncludingDirs();
             return true;
         }
-        // default continues here !!!!!!!!!!!
+        [[gnu::fallthrough]];
     default:
         return false;
     }
@@ -1028,10 +1048,10 @@ void KrView::setFiles(DirListerInterface *files)
         return;
 
     QObject::disconnect(_files, 0, op(), 0);
-    QObject::connect(_files, SIGNAL(refreshDone(bool)), op(), SLOT(startUpdate()));
-    QObject::connect(_files, SIGNAL(cleared()), op(), SLOT(cleared()));
-    QObject::connect(_files, SIGNAL(addedFileItem(FileItem*)), op(), SLOT(fileAdded(FileItem*)));
-    QObject::connect(_files, SIGNAL(updatedFileItem(FileItem*)), op(), SLOT(fileUpdated(FileItem*)));
+    QObject::connect(_files, &DirListerInterface::scanDone, op(), &KrViewOperator::startUpdate);
+    QObject::connect(_files, &DirListerInterface::cleared, op(), &KrViewOperator::cleared);
+    QObject::connect(_files, &DirListerInterface::addedFileItem, op(), &KrViewOperator::fileAdded);
+    QObject::connect(_files, &DirListerInterface::updatedFileItem, op(), &KrViewOperator::fileUpdated);
 }
 
 void KrView::setFilter(KrViewProperties::FilterSpec filter, FilterSettings customFilter, bool applyToDirs)
@@ -1086,7 +1106,7 @@ void KrView::customSelection(bool select)
     KRQuery query = dialog.getQuery();
     // if the user canceled - quit
     if (query.isNull())
-        return ;
+        return;
     includeDirs = dialog.isExtraOptionChecked(i18n("Apply selection to folders"));
 
     changeSelection(query, select, includeDirs);
@@ -1149,10 +1169,10 @@ void KrView::refresh()
 
 void KrView::setSelected(const FileItem* fileitem, bool select)
 {
-    if(fileitem == _dummyFileItem)
+    if (fileitem == _dummyFileItem)
         return;
 
-    if(select)
+    if (select)
         clearSavedSelection();
     intSetSelected(fileitem, select);
 }

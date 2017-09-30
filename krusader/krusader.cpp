@@ -61,43 +61,43 @@ YP   YD 88   YD ~Y8888P' `8888Y' YP   YP Y8888D' Y88888P 88   YD
 #include <KWindowSystem/KStartupInfo>
 #include <KWindowSystem/KWindowSystem>
 
-#include "krusaderversion.h"
-#include "kicons.h"
-#include "krusaderview.h"
 #include "defaults.h"
-#include "krslots.h"
-#include "krservices.h"
-// This makes gcc-4.1 happy. Warning about possible problem with KrAction's dtor not called
-#include "krtrashhandler.h"
-#include "tabactions.h"
-#include "krglobal.h"
+#include "kicons.h"
 #include "kractions.h"
+#include "krglobal.h"
+#include "krservices.h"
+#include "krslots.h"
+#include "krtrashhandler.h"
+#include "krusaderversion.h"
+#include "krusaderview.h"
 #include "panelmanager.h"
-#include "Panel/krcolorcache.h"
-#include "Panel/viewactions.h"
-#include "Panel/listpanelactions.h"
-#include "Panel/krpanel.h"
-#include "Panel/krview.h"
-#include "Panel/krviewfactory.h"
-#include "UserAction/kraction.h"
-#include "UserAction/expander.h"
-#include "UserAction/useraction.h"
-#include "Dialogs/popularurls.h"
+#include "tabactions.h"
+
+#include "BookMan/krbookmarkhandler.h"
 #include "Dialogs/checksumdlg.h"
 #include "Dialogs/krpleasewait.h"
-#include "GUI/krremoteencodingmenu.h"
-#include "GUI/kfnkeys.h"
-#include "GUI/kcmdline.h"
-#include "GUI/terminaldock.h"
-#include "GUI/krusaderstatus.h"
+#include "Dialogs/popularurls.h"
 #include "FileSystem/fileitem.h"
 #include "FileSystem/krpermhandler.h"
-#include "MountMan/kmountman.h"
-#include "Konfigurator/kgprotocols.h"
-#include "BookMan/krbookmarkhandler.h"
-#include "KViewer/krviewer.h"
+#include "GUI/kcmdline.h"
+#include "GUI/kfnkeys.h"
+#include "GUI/krremoteencodingmenu.h"
+#include "GUI/krusaderstatus.h"
+#include "GUI/terminaldock.h"
 #include "JobMan/jobman.h"
-
+#include "KViewer/krviewer.h"
+#include "Konfigurator/kgprotocols.h"
+#include "MountMan/kmountman.h"
+#include "Panel/PanelView/krview.h"
+#include "Panel/PanelView/krviewfactory.h"
+#include "Panel/krcolorcache.h"
+#include "Panel/krpanel.h"
+#include "Panel/listpanelactions.h"
+#include "Panel/viewactions.h"
+#include "UserAction/expander.h"
+// This makes gcc-4.1 happy. Warning about possible problem with KrAction's dtor not called
+#include "UserAction/kraction.h"
+#include "UserAction/useraction.h"
 
 #ifdef __KJSEMBED__
 #include "KrJS/krjs.h"
@@ -128,7 +128,7 @@ Krusader::Krusader(const QCommandLineParser &parser) : KParts::MainWindow(0,
 
     plzWait = new KRPleaseWaitHandler(this);
 
-    bool runKonfig = versionControl();
+    const bool runKonfig = versionControl();
 
     QString message;
     switch (krConfig->accessMode()) {
@@ -329,42 +329,27 @@ void Krusader::setTray(bool forceCreation)
 
 bool Krusader::versionControl()
 {
-#define FIRST_RUN "First Time"
-    bool retval = false;
     // create config file
     krConfig = KSharedConfig::openConfig().data();
     KConfigGroup nogroup(krConfig, QString());
-
-    bool firstRun = nogroup.readEntry(FIRST_RUN, true);
-
-#if 0
-    QString oldVerText = nogroup.readEntry("Version", "10.0");
-    oldVerText.truncate(oldVerText.lastIndexOf("."));     // remove the third dot
-    float oldVer = oldVerText.toFloat();
-    // older icompatible version
-    if (oldVer <= 0.9) {
-        KMessageBox::information(krApp, i18n("A configuration of 1.51 or older was detected. Krusader has to reset your configuration to default values.\nNote: your bookmarks and keybindings will remain intact.\nKrusader will now run Konfigurator."));
-        /*if ( !QDir::home().remove( ".kde/share/config/krusaderrc" ) ) {
-           KMessageBox::error( krApp, i18n( "Unable to remove your krusaderrc file. Please remove it manually and rerun Krusader." ) );
-           exit( 1 );
-        }*/
-        retval = true;
-        krConfig->reparseConfiguration();
-    }
-#endif
+    const bool firstRun = nogroup.readEntry("First Time", true);
+    KrGlobal::sCurrentConfigVersion = nogroup.readEntry("Config Version", -1);
 
     // first installation of krusader
     if (firstRun) {
-        KMessageBox::information(krApp, i18n("<qt><b>Welcome to Krusader.</b><p>As this is your first run, your machine will now be checked for external applications. Then the Konfigurator will be launched where you can customize Krusader to your needs.</p></qt>"));
-        retval = true;
+        KMessageBox::information(
+            krApp, i18n("<qt><b>Welcome to Krusader.</b><p>As this is your first run, your machine "
+                        "will now be checked for external applications. Then the Konfigurator will "
+                        "be launched where you can customize Krusader to your needs.</p></qt>"));
     }
     nogroup.writeEntry("Version", VERSION);
-    nogroup.writeEntry(FIRST_RUN, false);
+    nogroup.writeEntry("First Time", false);
     krConfig->sync();
 
-    QDir().mkpath(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + QStringLiteral("/krusader/"));
+    QDir().mkpath(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) +
+                  QStringLiteral("/krusader/"));
 
-    return retval;
+    return firstRun;
 }
 
 void Krusader::statusBarUpdate(const QString& mess)
@@ -424,6 +409,9 @@ void Krusader::saveSettings() {
     if (MAIN_VIEW->isTerminalEmulatorFullscreen()) {
         MAIN_VIEW->setTerminalEmulator(false, true);
     }
+
+    KConfigGroup noGroup(krConfig, QString());
+    noGroup.writeEntry("Config Version", KrGlobal::sConfigVersion);
 
     // save toolbar settings
     KConfigGroup cfg(krConfig, "Main Toolbar");

@@ -34,6 +34,7 @@
 #include "filesystem.h"
 
 // QtCore
+#include <QDebug>
 #include <QDir>
 #include <QList>
 // QtWidgets
@@ -43,18 +44,20 @@
 #include <KI18n/KLocalizedString>
 #include <KIO/JobUiDelegate>
 
+#include "fileitem.h"
+#include "krpermhandler.h"
 #include "../defaults.h"
 #include "../krglobal.h"
 #include "../JobMan/jobman.h"
 #include "../JobMan/krjob.h"
-#include "krpermhandler.h"
 
 FileSystem::FileSystem() : DirListerInterface(0), _isRefreshing(false) {}
 
 FileSystem::~FileSystem()
 {
     clear(_fileItems);
-    emit cleared(); // please don't remove this line. This informs the view about deleting the references
+    // please don't remove this line. This informs the view about deleting the file items.
+    emit cleared();
 }
 
 QList<QUrl> FileSystem::getUrls(const QStringList &names) const
@@ -103,8 +106,10 @@ QUrl FileSystem::preferLocalUrl(const QUrl &url){
     return adjustedUrl;
 }
 
-bool FileSystem::refresh(const QUrl &directory)
+bool FileSystem::scanOrRefresh(const QUrl &directory, bool onlyScan)
 {
+    qDebug() << "from current dir=" << _currentDirectory.toDisplayString()
+             << "; to=" << directory.toDisplayString();
     if (_isRefreshing) {
         // NOTE: this does not happen (unless async)";
         return false;
@@ -134,10 +139,10 @@ bool FileSystem::refresh(const QUrl &directory)
         // show an empty directory while loading the new one and clear selection
         emit cleared();
 
-    const bool res = refreshInternal(toRefresh, showHiddenFiles());
+    const bool refreshed = refreshInternal(toRefresh, onlyScan);
     _isRefreshing = false;
 
-    if (!res) {
+    if (!refreshed) {
         // cleanup and abort
         if (!dirChange)
             emit cleared();
@@ -145,7 +150,7 @@ bool FileSystem::refresh(const QUrl &directory)
         return false;
     }
 
-    emit refreshDone(dirChange);
+    emit scanDone(dirChange);
 
     clear(tempFileItems);
 
@@ -157,33 +162,54 @@ bool FileSystem::refresh(const QUrl &directory)
 void FileSystem::deleteFiles(const QStringList &fileNames, bool moveToTrash)
 {
     // get absolute URLs for file names
-    const QList<QUrl> fileUrls = getUrls(fileNames);
+    deleteAnyFiles(getUrls(fileNames), moveToTrash);
+}
 
-    KrJob *krJob = KrJob::createDeleteJob(fileUrls, moveToTrash);
-    connect(krJob, &KrJob::started, this, [=](KIO::Job *job) { connectJob(job, currentDirectory()); });
+void FileSystem::deleteAnyFiles(const QList<QUrl> &urls, bool moveToTrash)
+{
+    KrJob *krJob = KrJob::createDeleteJob(urls, moveToTrash);
+    connect(krJob, &KrJob::started, this, [=](KIO::Job *job) {
+        connectJobToSources(job, urls);
+    });
+
     if (moveToTrash) {
         // update destination: the trash bin (in case a panel/tab is showing it)
         connect(krJob, &KrJob::started, this, [=](KIO::Job *job) {
             // Note: the "trash" protocal should always have only one "/" after the "scheme:" part
-            connect(job, &KIO::Job::result, this, [=]() { emit fileSystemChanged(QUrl("trash:/")); });
+            connect(job, &KIO::Job::result, this, [=]() { emit fileSystemChanged(QUrl("trash:/"), false); });
         });
     }
 
     krJobMan->manageJob(krJob);
 }
 
-void FileSystem::connectJob(KJob *job, const QUrl &destination)
+void FileSystem::connectJobToSources(KJob *job, const QList<QUrl> urls)
 {
+    if (!urls.isEmpty()) {
+        // TODO we assume that all files were in the same directory and only emit one signal for
+        // the directory of the first file URL (all subdirectories of parent are notified)
+        const QUrl url = urls.first().adjusted(QUrl::RemoveFilename);
+        connect(job, &KIO::Job::result, this, [=]() { emit fileSystemChanged(url, true); });
+    }
+}
+
+void FileSystem::connectJobToDestination(KJob *job, const QUrl &destination)
+{
+    connect(job, &KIO::Job::result, this, [=]() { emit fileSystemChanged(destination, false); });
     // (additional) direct refresh if on local fs because watcher is too slow
     const bool refresh = cleanUrl(destination) == _currentDirectory && isLocal();
     connect(job, &KIO::Job::result, this, [=](KJob* job) { slotJobResult(job, refresh); });
-    connect(job, &KIO::Job::result, this, [=]() { emit fileSystemChanged(destination); });
 }
 
 bool FileSystem::showHiddenFiles()
 {
     const KConfigGroup gl(krConfig, "Look&Feel");
     return gl.readEntry("Show Hidden", _ShowHidden);
+}
+
+void FileSystem::addFileItem(FileItem *item)
+{
+    _fileItems.insert(item->getName(), item);
 }
 
 FileItem *FileSystem::createLocalFileItem(const QString &name, const QString &directory, bool virt)
@@ -208,6 +234,7 @@ FileItem *FileSystem::createLocalFileItem(const QString &name, const QString &di
     bool brokenLink = false;
     if (isLink) {
         // find where the link is pointing to
+        qDebug() << "link name=" << path;
         // the path of the symlink target cannot be longer than the file size of the symlink
         char buffer[stat_p.st_size];
         memset(buffer, 0, sizeof(buffer));
@@ -220,12 +247,13 @@ FileItem *FileSystem::createLocalFileItem(const QString &name, const QString &di
             else if (linkFile.isDir())
                 isDir = true;
         } else {
-            krOut << "Failed to read link: " << path;
+            qWarning() << "failed to read link, path=" << path;
         }
     }
 
     return new FileItem(virt ? path : name, QUrl::fromLocalFile(path), isDir,
-                     size, stat_p.st_mode, stat_p.st_mtime,
+                     size, stat_p.st_mode,
+                     stat_p.st_mtime, stat_p.st_ctime, stat_p.st_atime,
                      stat_p.st_uid, stat_p.st_gid, QString(), QString(),
                      isLink, linkDestination, brokenLink);
 }
@@ -246,6 +274,8 @@ FileItem *FileSystem::createFileItemFromKIO(const KIO::UDSEntry &entry, const QU
 
     // get file statistics...
     const time_t mtime = kfi.time(KFileItem::ModificationTime).toTime_t();
+    const time_t ctime = kfi.time(KFileItem::CreationTime).toTime_t(); // "Creation"? its "Changed"
+    const time_t atime = kfi.time(KFileItem::AccessTime).toTime_t();
     const mode_t mode = kfi.mode() | kfi.permissions();
     // NOTE: we could get the mimetype (and file icon) from the kfileitem here but this is very
     // slow. Instead, the file item class has it's own (faster) way to determine the file type.
@@ -253,13 +283,12 @@ FileItem *FileSystem::createFileItemFromKIO(const KIO::UDSEntry &entry, const QU
     // NOTE: "broken link" flag is always false, checking link destination existence is
     // considered to be too expensive
     return new FileItem(fname, url, kfi.isDir(),
-                     kfi.size(), mode, mtime,
+                     kfi.size(), mode,
+                     mtime, ctime, atime,
                      (uid_t) -1, (gid_t) -1, kfi.user(), kfi.group(),
                      kfi.isLink(), kfi.linkDest(), false,
                      kfi.ACL().asString(), kfi.defaultACL().asString());
 }
-
-// ==== protected slots ====
 
 void FileSystem::slotJobResult(KJob *job, bool refresh)
 {
@@ -272,8 +301,6 @@ void FileSystem::slotJobResult(KJob *job, bool refresh)
         FileSystem::refresh();
     }
 }
-
-// ==== private ====
 
 void FileSystem::clear(FileItemDict &fileItems)
 {

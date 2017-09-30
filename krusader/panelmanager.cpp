@@ -25,7 +25,7 @@
 #include "krmainwindow.h"
 #include "Panel/listpanel.h"
 #include "Panel/panelfunc.h"
-#include "Panel/krviewfactory.h"
+#include "Panel/PanelView/krviewfactory.h"
 
 #include <assert.h>
 
@@ -41,15 +41,13 @@
 #include <KIconThemes/KIconLoader>
 
 
-#define HIDE_ON_SINGLE_TAB  false
-
 PanelManager::PanelManager(QWidget *parent, KrMainWindow* mainWindow, bool left) :
         QWidget(parent),
         _otherManager(0),
         _actions(mainWindow->tabActions()),
         _layout(0),
         _left(left),
-        _self(0)
+        _currentPanel(0)
 {
     _layout = new QGridLayout(this);
     _layout->setContentsMargins(0, 0, 0, 0);
@@ -95,15 +93,12 @@ PanelManager::PanelManager(QWidget *parent, KrMainWindow* mainWindow, bool left)
 
 void PanelManager::tabsCountChanged()
 {
-    bool showTabbar = true;
-    if (_tabbar->count() <= 1 && HIDE_ON_SINGLE_TAB)
-        showTabbar = false;
+    const KConfigGroup cfg(krConfig, "Look&Feel");
+    const bool showTabbar = _tabbar->count() > 1 || cfg.readEntry("Show Tab Bar On Single Tab", true);
+    const bool showButtons = showTabbar && cfg.readEntry("Show Tab Buttons", true);
 
-    KConfigGroup cfg(krConfig, "Look&Feel");
-    bool showButtons = showTabbar && cfg.readEntry("Show Tab Buttons", true);
-
-    _newTab->setVisible(showButtons);
     _tabbar->setVisible(showTabbar);
+    _newTab->setVisible(showButtons);
 
     // disable close button if only 1 tab is left
     _tabbar->setTabsClosable(showButtons && _tabbar->count() > 1);
@@ -121,24 +116,26 @@ void PanelManager::activate()
 void PanelManager::slotCurrentTabChanged(int index)
 // void PanelManager::slotChangePanel(ListPanel *p, bool makeActive)
 {
-    ListPanel *p = _tabbar->getPanel(index);
+    ListPanel *panel = _tabbar->getPanel(index);
 
-    if (!p || p == _self)
+    if (!panel || panel == _currentPanel)
         return;
 
-    ListPanel *prev = _self;
-    _self = p;
+    ListPanel *previousPanel = _currentPanel;
+    _currentPanel = panel;
 
-    _stack->setCurrentWidget(_self);
+    _stack->setCurrentWidget(_currentPanel);
 
-    if(prev)
-        prev->slotFocusOnMe(false); //FIXME - necessary ?
-    _self->slotFocusOnMe(this == ACTIVE_MNG);
+    if (previousPanel) {
+        previousPanel->slotFocusOnMe(false); // FIXME - necessary ?
+    }
+    _currentPanel->slotFocusOnMe(this == ACTIVE_MNG);
 
-    emit pathChanged(p);
+    emit pathChanged(panel);
 
-    if(otherManager())
+    if (otherManager()) {
         otherManager()->currentPanel()->otherPanelChanged();
+    }
 }
 
 ListPanel* PanelManager::createPanel(KConfigGroup cfg)
@@ -225,9 +222,13 @@ void PanelManager::layoutTabs()
     QTimer::singleShot(0, _tabbar, SLOT(layoutTabs()));
 }
 
+KrPanel *PanelManager::currentPanel() const {
+    return _currentPanel;
+}
+
 void PanelManager::moveTabToOtherSide()
 {
-    if(tabCount() < 2)
+    if (tabCount() < 2)
         return;
 
     ListPanel *p;
@@ -281,7 +282,7 @@ void PanelManager::slotCloseTab()
 void PanelManager::slotCloseTab(int index)
 {
     if (_tabbar->count() <= 1)    /* if this is the last tab don't close it */
-        return ;
+        return;
 
     ListPanel *oldp;
 
@@ -334,9 +335,9 @@ void PanelManager::slotRecreatePanels()
         _stack->insertWidget(i, newPanel);
         _tabbar->changePanel(i, newPanel);
 
-        if (_self == oldPanel) {
-            _self = newPanel;
-            _stack->setCurrentWidget(_self);
+        if (_currentPanel == oldPanel) {
+            _currentPanel = newPanel;
+            _stack->setCurrentWidget(_currentPanel);
         }
 
         _stack->removeWidget(oldPanel);
@@ -349,8 +350,8 @@ void PanelManager::slotRecreatePanels()
         krConfig->deleteGroup(grpName);
     }
     tabsCountChanged();
-    _self->slotFocusOnMe(this == ACTIVE_MNG);
-    emit pathChanged(_self);
+    _currentPanel->slotFocusOnMe(this == ACTIVE_MNG);
+    emit pathChanged(_currentPanel);
 }
 
 void PanelManager::slotNextTab()
@@ -368,15 +369,13 @@ void PanelManager::slotPreviousTab()
     _tabbar->setCurrentIndex(nextInd);
 }
 
-void PanelManager::refreshAllTabs()
+void PanelManager::reloadConfig()
 {
-    int i = 0;
-    while (i < _tabbar->count()) {
+    for (int i = 0; i < _tabbar->count(); i++) {
         ListPanel *panel = _tabbar->getPanel(i);
         if (panel) {
             panel->func->refresh();
         }
-        ++i;
     }
 }
 
@@ -437,7 +436,7 @@ int PanelManager::findTab(QUrl url)
 
 void PanelManager::slotLockTab()
 {
-    ListPanel *panel = _self;
+    ListPanel *panel = _currentPanel;
     panel->gui->setLocked(!panel->gui->isLocked());
     _actions->refreshActions();
     _tabbar->updateTab(panel);
@@ -447,9 +446,3 @@ void PanelManager::newTabs(const QStringList& urls) {
     for(int i = 0; i < urls.count(); i++)
         slotNewTab(QUrl::fromUserInput(urls[i], QString(), QUrl::AssumeLocalFile));
 }
-
-KrPanel *PanelManager::currentPanel()
-{
-    return _self;
-}
-

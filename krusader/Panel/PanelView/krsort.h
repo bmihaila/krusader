@@ -20,6 +20,8 @@
 #ifndef KRSORT_H
 #define KRSORT_H
 
+#include <sys/types.h>
+
 // QtCore
 #include <QString>
 #include <QVector>
@@ -28,6 +30,7 @@
 class FileItem;
 class KrViewProperties;
 
+/** Implements sorting for the panel list model. */
 namespace KrSort {
 
 class SortProps
@@ -92,6 +95,7 @@ private:
 bool compareTexts(QString aS1, QString aS2, const KrViewProperties * _viewProperties, bool asc, bool isName);
 bool itemLessThan(SortProps *sp, SortProps *sp2);
 bool itemGreaterThan(SortProps *sp, SortProps *sp2);
+bool compareTime(time_t time1, time_t time2, SortProps *sp, SortProps *sp2);
 
 typedef bool(*LessThanFunc)(SortProps*, SortProps*);
 

@@ -17,20 +17,21 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA *
  *****************************************************************************/
 
-#include "panelpopup.h"
+#include "sidebar.h"
 
 #include "krfiletreeview.h"
 #include "krpanel.h"
-#include "krview.h"
-#include "krviewitem.h"
 #include "panelfunc.h"
 #include "viewactions.h"
-#include "../kicons.h"
-#include "../krmainwindow.h"
 #include "../defaults.h"
+#include "../kicons.h"
 #include "../Dialogs/krsqueezedtextlabel.h"
-#include "../KViewer/panelviewer.h"
+#include "../FileSystem/fileitem.h"
+#include "../FileSystem/filesystem.h"
 #include "../KViewer/diskusageviewer.h"
+#include "../KViewer/panelviewer.h"
+#include "PanelView/krview.h"
+#include "PanelView/krviewitem.h"
 
 // QtCore
 #include <QMimeDatabase>
@@ -43,15 +44,10 @@
 #include <KI18n/KLocalizedString>
 #include <KIconThemes/KIconLoader>
 
-
-PanelPopup::PanelPopup(QSplitter *parent, bool left, KrMainWindow *mainWindow) : QWidget(parent),
-        _left(left), _hidden(true), _mainWindow(mainWindow), stack(0), imageFilePreview(0), pjob(0), splitterSizes()
+Sidebar::Sidebar(QWidget *parent) : QWidget(parent), stack(0), imageFilePreview(0), pjob(0)
 {
-    splitter = parent;
     QGridLayout * layout = new QGridLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
-
-    splitterSizes << 100 << 100;
 
     // create the label+buttons setup
     dataLine = new KrSqueezedTextLabel(this);
@@ -105,18 +101,12 @@ PanelPopup::PanelPopup(QSplitter *parent, bool left, KrMainWindow *mainWindow) :
 
     // create the tree part ----------
     tree = new KrFileTreeView(stack);
-    tree->setAcceptDrops(true);
-    tree->setDragDropMode(QTreeView::DropOnly);
-    tree->setDropIndicatorShown(true);
-    tree->setBriefMode(true);
-
     tree->setProperty("KrusaderWidgetId", QVariant(Tree));
     stack->addWidget(tree);
-    tree->setDirOnlyMode(true);
     // NOTE: the F2 key press event is caught before it gets to the tree
     tree->setEditTriggers(QAbstractItemView::EditKeyPressed);
-    connect(tree, SIGNAL(doubleClicked(QModelIndex)), this, SLOT(treeSelection()));
-    connect(tree, SIGNAL(activated(QUrl)), this, SLOT(treeSelection()));
+    // connecting signal to signal
+    connect(tree, &KrFileTreeView::urlActivated, this, &Sidebar::urlActivated);
 
     // create the quickview part ------
     imageFilePreview = new KImageFilePreview(stack);
@@ -124,19 +114,21 @@ PanelPopup::PanelPopup(QSplitter *parent, bool left, KrMainWindow *mainWindow) :
     stack->addWidget(imageFilePreview);
 
     // create the panelview
-
     fileViewer = new PanelViewer(stack);
     fileViewer->setProperty("KrusaderWidgetId", QVariant(View));
+    // kparts demand too much width
+    QSizePolicy sizePolicy = fileViewer->sizePolicy();
+    sizePolicy.setHorizontalPolicy(QSizePolicy::Ignored);
+    fileViewer->setSizePolicy(sizePolicy);
     stack->addWidget(fileViewer);
-    connect(fileViewer, SIGNAL(openUrlRequest(QUrl)), this, SLOT(handleOpenUrlRequest(QUrl)));
+    connect(fileViewer, &PanelViewer::openUrlRequest, this, &Sidebar::handleOpenUrlRequest);
 
     // create the disk usage view
-
     diskusage = new DiskUsageViewer(stack);
     diskusage->setStatusLabel(dataLine, i18n("Disk Usage:"));
     diskusage->setProperty("KrusaderWidgetId", QVariant(DskUsage));
     stack->addWidget(diskusage);
-    connect(diskusage, SIGNAL(openUrlRequest(QUrl)), this, SLOT(handleOpenUrlRequest(QUrl)));
+    connect(diskusage, &DiskUsageViewer::openUrlRequest, this, &Sidebar::handleOpenUrlRequest);
 
     // -------- finish the layout (General one)
     layout->addWidget(stack, 1, 0, 1, 5);
@@ -145,21 +137,19 @@ PanelPopup::PanelPopup(QSplitter *parent, bool left, KrMainWindow *mainWindow) :
     setCurrentPage(0);
 }
 
-PanelPopup::~PanelPopup() {}
+Sidebar::~Sidebar() {}
 
-void PanelPopup::saveSettings(KConfigGroup cfg) const
+void Sidebar::saveSettings(KConfigGroup cfg) const
 {
-    if (currentPage() == Tree) {
-        cfg.writeEntry("TreeBriefMode", tree->briefMode());
-    }
+    tree->saveSettings(cfg);
 }
 
-void PanelPopup::restoreSettings(KConfigGroup cfg)
+void Sidebar::restoreSettings(const KConfigGroup &cfg)
 {
-    tree->setBriefMode(cfg.readEntry("TreeBriefMode", true));
+    tree->restoreSettings(cfg);
 }
 
-void PanelPopup::setCurrentPage(int id)
+void Sidebar::setCurrentPage(int id)
 {
     QAbstractButton * curr = btns->button(id);
     if (curr) {
@@ -167,26 +157,20 @@ void PanelPopup::setCurrentPage(int id)
     }
 }
 
-void PanelPopup::show()
+void Sidebar::show()
 {
     QWidget::show();
-    if (_hidden)
-        splitter->setSizes(splitterSizes);
-    _hidden = false;
     tabSelected(currentPage());
 }
 
-void PanelPopup::hide()
+void Sidebar::hide()
 {
-    if (!_hidden)
-        splitterSizes = splitter->sizes();
     QWidget::hide();
-    _hidden = true;
     if (currentPage() == View) fileViewer->closeUrl();
     if (currentPage() == DskUsage) diskusage->closeUrl();
 }
 
-void PanelPopup::focusInEvent(QFocusEvent*)
+void Sidebar::focusInEvent(QFocusEvent*)
 {
     switch (currentPage()) {
     case Preview:
@@ -208,14 +192,14 @@ void PanelPopup::focusInEvent(QFocusEvent*)
     }
 }
 
-void PanelPopup::handleOpenUrlRequest(const QUrl &url)
+void Sidebar::handleOpenUrlRequest(const QUrl &url)
 {
     QMimeDatabase db;
     QMimeType mime = db.mimeTypeForUrl(url);
     if (mime.isValid() && mime.name() == "inode/directory") ACTIVE_PANEL->func->openUrl(url);
 }
 
-void PanelPopup::tabSelected(int id)
+void Sidebar::tabSelected(int id)
 {
     QUrl url;
     const FileItem *fileitem = 0;
@@ -258,7 +242,7 @@ void PanelPopup::tabSelected(int id)
 }
 
 // decide which part to update, if at all
-void PanelPopup::update(const FileItem *fileitem)
+void Sidebar::update(const FileItem *fileitem)
 {
     if (isHidden())
         return;
@@ -291,7 +275,7 @@ void PanelPopup::update(const FileItem *fileitem)
     }
 }
 
-void PanelPopup::onPanelPathChange(const QUrl &url)
+void Sidebar::onPanelPathChange(const QUrl &url)
 {
     switch (currentPage()) {
     case Tree:
@@ -300,12 +284,4 @@ void PanelPopup::onPanelPathChange(const QUrl &url)
         }
         break;
     }
-}
-
-// ------------------- tree
-
-void PanelPopup::treeSelection()
-{
-    emit selection(tree->currentUrl());
-    //emit hideMe();
 }

@@ -31,6 +31,7 @@
 #include "advancedfilter.h"
 
 // QtCore
+#include <QDebug>
 #include <QFile>
 #include <QTextStream>
 // QtGui
@@ -464,7 +465,7 @@ void AdvancedFilter::fillList(KComboBox *list, QString filename)
 {
     QFile data(filename);
     if (!data.open(QIODevice::ReadOnly)) {
-        krOut << "Search: Unable to read " << filename << " !!!" << endl;
+        qWarning() << "Search: Unable to read " << filename << " !!!";
         return;
     }
     // and read it into the temporary array

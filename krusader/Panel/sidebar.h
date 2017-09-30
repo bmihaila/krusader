@@ -17,20 +17,17 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA *
  *****************************************************************************/
 
-#ifndef PANELPOPUP_H
-#define PANELPOPUP_H
+#ifndef SIDEBAR_H
+#define SIDEBAR_H
 
 // QtCore
 #include <QPointer>
-// QtGui
 // QtWidgets
 #include <QButtonGroup>
-#include <QSplitter>
 #include <QStackedWidget>
 #include <QToolButton>
 #include <QWidget>
 
-#include <KCompletion/KComboBox>
 #include <KConfigCore/KConfigGroup>
 #include <KIO/PreviewJob>
 #include <KIOFileWidgets/KImageFilePreview>
@@ -40,12 +37,11 @@ class PanelViewer;
 class DiskUsageViewer;
 class KrFileTreeView;
 class FileItem;
-class KrMainWindow;
 
 /**
  * Additional side widget showing various meta information for the current file/directories.
  */
-class PanelPopup: public QWidget
+class Sidebar: public QWidget
 {
     Q_OBJECT
 
@@ -63,13 +59,13 @@ class PanelPopup: public QWidget
     };
 
 public:
-    PanelPopup(QSplitter *splitter, bool left, KrMainWindow *mainWindow);
-    ~PanelPopup();
+    explicit Sidebar(QWidget *parent);
+    ~Sidebar();
     inline int currentPage() const {
         return stack->currentWidget()->property("KrusaderWidgetId").toInt();
     }
     void saveSettings(KConfigGroup cfg) const;
-    void restoreSettings(KConfigGroup cfg);
+    void restoreSettings(const KConfigGroup &cfg);
     void setCurrentPage(int);
 
 public slots:
@@ -79,20 +75,17 @@ public slots:
     void hide();
 
 signals:
-    void selection(const QUrl &url);
+    void urlActivated(const QUrl &url);
     void hideMe();
 
 protected slots:
     void tabSelected(int id);
-    void treeSelection();
     void handleOpenUrlRequest(const QUrl &url);
 
 protected:
     virtual void focusInEvent(QFocusEvent*) Q_DECL_OVERRIDE;
 
-    bool _left;
     bool _hidden;
-    KrMainWindow *_mainWindow;
     QStackedWidget *stack;
     KImageFilePreview *imageFilePreview;
     KrSqueezedTextLabel *dataLine;
@@ -100,11 +93,8 @@ protected:
     KrFileTreeView *tree;
     QToolButton *treeBtn, *previewBtn, *viewerBtn, *duBtn;
     QButtonGroup *btns;
-    KComboBox *quickSelectCombo;
     PanelViewer *fileViewer;
     DiskUsageViewer *diskusage;
-    QList<int> splitterSizes;
-    QSplitter *splitter;
 };
 
 #endif

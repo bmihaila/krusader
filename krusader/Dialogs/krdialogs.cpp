@@ -20,6 +20,7 @@
 #include "krdialogs.h"
 
 // QtCore
+#include <QDebug>
 #include <QDir>
 // QtGui
 #include <QFontMetrics>
@@ -73,8 +74,7 @@ QUrl KChooseDir::get(const QString &text, const QUrl &url, const QUrl &cwd, KFil
 KChooseDir::ChooseResult KChooseDir::getCopyDir(const QString &text, const QUrl &url,
                                                 const QUrl &cwd)
 {
-    QScopedPointer<KUrlRequesterDlgForCopy> dlg(new KUrlRequesterDlgForCopy(
-        FileSystem::ensureTrailingSlash(url), text, krMainWindow, true));
+    QScopedPointer<KUrlRequesterDlgForCopy> dlg(new KUrlRequesterDlgForCopy(url, text, krMainWindow, true));
 
     dlg->urlRequester()->setStartDir(cwd);
     dlg->urlRequester()->setMode(KFile::Directory);
@@ -157,6 +157,7 @@ QUrl KUrlRequesterDlgForCopy::selectedURL() const
 {
     if (result() == QDialog::Accepted) {
         QUrl url = urlRequester_->url();
+        qDebug() << "requester returned URL=" << url.toDisplayString();
         if (url.isValid())
             KRecentDocument::add(url);
         return url;

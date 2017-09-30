@@ -48,12 +48,27 @@ public:
 
     /**
      * Start a copy job for copying, moving or linking files to a destination directory.
-     * May be implemented async depending on destination filesystem.
+     * Operation may be implemented async depending on destination filesystem.
      */
     void startCopyFiles(const QList<QUrl> &urls, const QUrl &destination,
                         KIO::CopyJob::CopyMode mode = KIO::CopyJob::Copy,
                         bool showProgressInfo = true,
                         JobMan::StartMode startMode = JobMan::Default);
+
+    /**
+     * Handle file dropping. Starts a copy job for copying, moving or linking files to a destination
+     * directory after user choose the action in a context menu.
+     *
+     * Operation may implemented async depending on destination filesystem.
+     */
+    void startDropFiles(QDropEvent *event, const QUrl &destination);
+
+    /**
+     * Start a delete job for trashing or deleting files.
+     *
+     * Operation implemented async.
+     */
+    void startDeleteFiles(const QList<QUrl> &urls, bool moveToTrash = true);
 
     static FileSystemProvider &instance();
     static FileSystem::FS_TYPE getFilesystemType(const QUrl &url);
@@ -61,9 +76,17 @@ public:
     static void getACL(FileItem *file, QString &acl, QString &defAcl);
 
 public slots:
-    void refreshFilesystem(const QUrl &directory);
+    /**
+     * Notify filesystems if they are affected by changes made by another filesystem.
+     *
+     * Only works if filesystem is connected to this provider.
+     *
+     * @param directory the directory that was changed (deleted, moved, content changed,...)
+     */
+    void refreshFilesystems(const QUrl &directory, bool removed);
 
 private:
+    FileSystem *getFilesystemInstance(const QUrl &directory);
     FileSystem *createFilesystem(const FileSystem::FS_TYPE type);
     FileSystemProvider();
 

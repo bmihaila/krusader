@@ -19,14 +19,13 @@
 
 #include "listmodel.h"
 
-#include "krcolorcache.h"
 #include "krinterview.h"
-#include "krpanel.h"
 #include "krviewproperties.h"
-
-#include "../defaults.h"
-#include "../krglobal.h"
 #include "../FileSystem/fileitem.h"
+#include "../defaults.h"
+#include "../krcolorcache.h"
+#include "../krglobal.h"
+#include "../krpanel.h"
 
 #include <KConfigCore/KSharedConfig>
 #include <KI18n/KLocalizedString>
@@ -122,7 +121,7 @@ QVariant ListModel::data(const QModelIndex& index, int role) const
         if (index.column() == KrViewProperties::Name) {
             return fileitem == _dummyFileItem ? QVariant() : toolTipText(fileitem);
         }
-        // breaktrough
+        [[gnu::fallthrough]];
     }
     case Qt::DisplayRole: {
         switch (index.column()) {
@@ -135,13 +134,13 @@ QVariant ListModel::data(const QModelIndex& index, int role) const
             return fileitemName.mid(nameOnly.length() + 1);
         }
         case KrViewProperties::Size: {
-            if (fileitem->isDir() && fileitem->getSize() <= 0) {
+            if (fileitem->getUISize() == (KIO::filesize_t)-1) {
                 //HACK add <> brackets AFTER translating - otherwise KUIT thinks it's a tag
                 static QString label = QString("<") +
                     i18nc("Show the string 'DIR' instead of file size in detailed view (for folders)", "DIR") + '>';
                 return label;
             } else
-                return KrView::sizeText(properties(), fileitem->getSize());
+                return KrView::sizeText(properties(), fileitem->getUISize());
         }
         case KrViewProperties::Type: {
             if (fileitem == _dummyFileItem)
@@ -150,9 +149,13 @@ QVariant ListModel::data(const QModelIndex& index, int role) const
             return mimeType.isEmpty() ? QVariant() : mimeType;
         }
         case KrViewProperties::Modified: {
-            if (fileitem == _dummyFileItem)
-                return QVariant();
-            return dateText(fileitem->getTime_t());
+            return fileitem == _dummyFileItem ? QVariant() : dateText(fileitem->getTime_t());
+        }
+        case KrViewProperties::Changed: {
+            return fileitem == _dummyFileItem ? QVariant() : dateText(fileitem->getChangedTime());
+        }
+        case KrViewProperties::Accessed: {
+            return fileitem == _dummyFileItem ? QVariant() : dateText(fileitem->getAccessTime());
         }
         case KrViewProperties::Permissions: {
             if (fileitem == _dummyFileItem)
@@ -394,65 +397,6 @@ QModelIndex ListModel::removeItem(FileItem *fileitem)
     return currIndex;
 }
 
-void ListModel::updateItem(FileItem *fileitem)
-{
-    QModelIndex oldModelIndex = fileItemIndex(fileitem);
-
-    if (!oldModelIndex.isValid()) {
-        addItem(fileitem);
-        return;
-    }
-    if(lastSortOrder() == KrViewProperties::NoColumn) {
-        _view->redrawItem(fileitem);
-        return;
-    }
-
-    int oldIndex = oldModelIndex.row();
-
-    emit layoutAboutToBeChanged();
-
-    _fileItems.removeAt(oldIndex);
-
-    KrSort::Sorter sorter(createSorter());
-
-    QModelIndexList oldPersistentList = persistentIndexList();
-
-    int newIndex = sorter.insertIndex(fileitem, fileitem == _dummyFileItem, customSortData(fileitem));
-    if (newIndex != _fileItems.count()) {
-        if (newIndex > oldIndex)
-            newIndex--;
-        _fileItems.insert(newIndex, fileitem);
-    } else
-        _fileItems.append(fileitem);
-
-
-    int i = newIndex;
-    if (oldIndex < i)
-        i = oldIndex;
-    for (; i < _fileItems.count(); ++i) {
-        updateIndices(_fileItems[i], i);
-    }
-
-    QModelIndexList newPersistentList;
-    foreach(const QModelIndex &mndx, oldPersistentList) {
-        int newRow = mndx.row();
-        if (newRow == oldIndex)
-            newRow = newIndex;
-        else {
-            if (newRow >= oldIndex)
-                newRow--;
-            if (mndx.row() > newIndex)
-                newRow++;
-        }
-        newPersistentList << index(newRow, mndx.column());
-    }
-
-    changePersistentIndexList(oldPersistentList, newPersistentList);
-    emit layoutChanged();
-    if (newIndex != oldIndex)
-        _view->makeItemVisible(_view->getCurrentKrViewItem());
-}
-
 QVariant ListModel::headerData(int section, Qt::Orientation orientation, int role) const
 {
     // ignore anything that's not display, and not horizontal
@@ -465,6 +409,8 @@ QVariant ListModel::headerData(int section, Qt::Orientation orientation, int rol
     case KrViewProperties::Size: return i18nc("File property", "Size");
     case KrViewProperties::Type: return i18nc("File property", "Type");
     case KrViewProperties::Modified: return i18nc("File property", "Modified");
+    case KrViewProperties::Changed: return i18nc("File property", "Changed");
+    case KrViewProperties::Accessed: return i18nc("File property", "Accessed");
     case KrViewProperties::Permissions: return i18nc("File property", "Perms");
     case KrViewProperties::KrPermissions: return i18nc("File property", "rwx");
     case KrViewProperties::Owner: return i18nc("File property", "Owner");
@@ -569,12 +515,14 @@ QString ListModel::toolTipText(FileItem *fileItem) const
 {
     //"<p style='white-space:pre'>"; // disable automatic word-wrap
     QString text = "<b>" + fileItem->getName() + "</b><hr>";
-    if (!fileItem->isDir() || fileItem->getSize() != 0) {
-        const QString size = KrView::sizeText(properties(), fileItem->getSize());
+    if (fileItem->getUISize() != (KIO::filesize_t)-1) {
+        const QString size = KrView::sizeText(properties(), fileItem->getUISize());
         text += i18n("Size: %1", size) + "<br>";
     }
     text += i18nc("File property", "Type: %1", KrView::mimeTypeText(fileItem));
     text += "<br>" + i18nc("File property", "Modified: %1", dateText(fileItem->getTime_t()));
+    text += "<br>" + i18nc("File property", "Changed: %1", dateText(fileItem->getChangedTime()));
+    text += "<br>" + i18nc("File property", "Last Access: %1", dateText(fileItem->getAccessTime()));
     text += "<br>" + i18nc("File property", "Permissions: %1",
             KrView::permissionsText(properties(), fileItem));
     text += "<br>" + i18nc("File property", "Owner: %1", fileItem->getOwner());

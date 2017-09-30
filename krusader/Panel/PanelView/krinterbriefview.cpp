@@ -37,16 +37,17 @@
 #include <KI18n/KLocalizedString>
 #include <KIOWidgets/KDirLister>
 
+#include "krmousehandler.h"
 #include "krviewfactory.h"
 #include "krviewitemdelegate.h"
 #include "krviewitem.h"
 #include "listmodel.h"
-#include "krmousehandler.h"
-#include "krcolorcache.h"
+#include "../krcolorcache.h"
 #include "../FileSystem/krpermhandler.h"
 #include "../defaults.h"
 #include "../GUI/krstyleproxy.h"
 
+#define MAX_BRIEF_COLS 5
 
 KrInterBriefView::KrInterBriefView(QWidget *parent, KrViewInstance &instance, KConfig *cfg) :
         QAbstractItemView(parent),
@@ -132,6 +133,8 @@ void KrInterBriefView::setup()
     _header->hideSection(KrViewProperties::KrPermissions);
     _header->hideSection(KrViewProperties::Owner);
     _header->hideSection(KrViewProperties::Group);
+    _header->hideSection(KrViewProperties::Changed);
+    _header->hideSection(KrViewProperties::Accessed);
     _header->setStretchLastSection(true);
     _header->setSectionResizeMode(QHeaderView::Fixed);
     _header->setSectionsClickable(true);

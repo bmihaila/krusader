@@ -45,6 +45,8 @@ PanelViewerBase::PanelViewerBase(QWidget *parent, KrViewer::Mode mode) :
 
     mimes = new QHash<QString, QPointer<KParts::ReadOnlyPart> >();
     cpart = 0;
+    // NOTE: the fallback should be never visible. The viewer is not opened without a file and the
+    // tab is closed if a file cannot be opened.
     fallback = new QLabel(i18n("No file selected or selected file cannot be displayed."), this);
     fallback->setAlignment(Qt::Alignment(QFlag(Qt::AlignCenter | Qt::TextExpandTabs)));
     fallback->setWordWrap(true);
@@ -189,27 +191,23 @@ KParts::ReadOnlyPart* PanelViewer::getDefaultPart(KFileItem fi)
 
     switch(mode) {
     case KrViewer::Generic:
-        if((mimetype.startsWith(QLatin1String("text/")) ||
-            mimetype.startsWith(QLatin1String("all/"))) &&
-                fileSize > limit) {
+        if ((mimetype.startsWith(QLatin1String("text/")) ||
+             mimetype.startsWith(QLatin1String("all/"))) &&
+            fileSize > limit) {
             part = getListerPart(isBinary);
             break;
-        } else if((part = getPart(mimetype)))
+        } else if ((part = getPart(mimetype))) {
             break;
+        }
+        [[gnu::fallthrough]];
     case KrViewer::Text:
-        if (fileSize > limit)
-            part =  getListerPart(false);
-        else
-            part = getTextPart();
+        part = fileSize > limit ? getListerPart(false) : getTextPart();
         break;
     case KrViewer::Lister:
         part = getListerPart(isBinary);
         break;
     case KrViewer::Hex:
-        if (fileSize > limit)
-            part = getListerPart(true);
-        else
-            part = getHexPart();
+        part = fileSize > limit ? getListerPart(true) : getHexPart();
         break;
     default:
         abort();

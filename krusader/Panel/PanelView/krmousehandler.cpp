@@ -17,11 +17,11 @@
  *****************************************************************************/
 
 #include "krmousehandler.h"
+#include "krselectionmode.h"
 #include "krview.h"
 #include "krviewitem.h"
-#include "krselectionmode.h"
-#include "../krglobal.h"
 #include "../defaults.h"
+#include "../krglobal.h"
 
 // QtCore
 #include <QStandardPaths>
@@ -88,7 +88,7 @@ bool KrMouseHandler::mousePressEvent(QMouseEvent *e)
 
                 // get current selected item names
                 _selectedItemNames.clear();
-                _view->getSelectedItems(&_selectedItemNames, true);
+                _view->getSelectedItems(&_selectedItemNames, false);
 
                 item->setSelected(!item->isSelected());
 

@@ -43,8 +43,6 @@
 
 #include "krviewproperties.h"
 
-#define MAX_BRIEF_COLS 5
-
 class KrView;
 class KrViewItem;
 class KrPreviews;
@@ -86,7 +84,7 @@ public:
     void emitGoHome() { emit goHome(); }
     void emitDirUp() { emit dirUp(); }
     void emitQuickCalcSpace(KrViewItem *item) { emit quickCalcSpace(item); }
-    void emitDefaultDeleteFiles(bool invertMode) { emit defaultDeleteFiles(invertMode); }
+    void emitDefaultDeleteFiles() { emit defaultDeleteFiles(); }
     void emitRefreshActions() { emit refreshActions(); }
     void emitGoBack() { emit goBack(); }
     void emitGoForward() { emit goForward(); }
@@ -103,6 +101,11 @@ public slots:
             emit selectionChanged();
     }
 
+    void startUpdate();
+    void cleared();
+    void fileAdded(FileItem *fileitem);
+    void fileUpdated(FileItem *newFileitem);
+
 signals:
     void selectionChanged();
     void gotDrop(QDropEvent *e);
@@ -118,7 +121,7 @@ signals:
     void currentChanged(KrViewItem *item);
     void previewJobStarted(KJob *job);
     void goHome();
-    void defaultDeleteFiles(bool invertMode);
+    void defaultDeleteFiles();
     void dirUp();
     void quickCalcSpace(KrViewItem *item);
     void refreshActions();
@@ -127,11 +130,6 @@ signals:
 
 protected slots:
     void saveDefaultSettings();
-    void startUpdate();
-    void cleared();
-
-    void fileAdded(FileItem *fileitem);
-    void fileUpdated(FileItem *fileitem);
 
 protected:
     // never delete those
@@ -233,14 +231,13 @@ public:
 protected:
     virtual KrViewItem *preAddItem(FileItem *fileitem) = 0;
     virtual void preDelItem(KrViewItem *item) = 0;
-    virtual void preUpdateItem(FileItem *fileitem) = 0;
     virtual void copySettingsFrom(KrView *other) = 0;
     virtual void populate(const QList<FileItem *> &fileItems, FileItem *dummy) = 0;
     virtual void intSetSelected(const FileItem *fileitem, bool select) = 0;
     virtual void clear();
 
     void addItem(FileItem *fileitem);
-    void updateItem(FileItem *fileitem);
+    void updateItem(FileItem *newFileItem);
     void delItem(const QString &name);
 
 public:
@@ -251,7 +248,7 @@ public:
     uint numFiles() const { return _count - _numDirs; }
     uint numDirs() const { return _numDirs; }
     uint count() const { return _count; }
-    void getSelectedItems(QStringList *names, bool ignoreJustFocused = false);
+    void getSelectedItems(QStringList *names, bool fallbackToFocused = true);
     void getItemsByMask(QString mask, QStringList *names, bool dirs = true, bool files = true);
     void getSelectedKrViewItems(KrViewItemList *items);
     void selectAllIncludingDirs() { changeSelection(KRQuery("*"), true, true); }

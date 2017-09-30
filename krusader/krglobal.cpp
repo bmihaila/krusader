@@ -32,7 +32,6 @@ YP   YD 88   YD ~Y8888P' `8888Y' YP   YP Y8888D' Y88888P 88   YD
 
 #include "krusader.h"
 #include "krusaderview.h"
-#include "panelmanager.h"
 
 // QtCore
 #include <QtGlobal>
@@ -51,14 +50,12 @@ JobMan *KrGlobal::jobMan = 0;
 // ListPanel *KrGlobal::activePanel = 0;
 QKeySequence KrGlobal::copyShortcut;
 
+const int KrGlobal::sConfigVersion;
+int KrGlobal::sCurrentConfigVersion;
 
 KrPanel *KrGlobal::activePanel()
 {
-    // active manager might not be set yet
-    if(mainView->activeManager())
-        return mainView->activeManager()->currentPanel();
-    else
-        return 0;
+    return mainView->activePanel();
 }
 
 // void KrGlobal::enableAction(const char *name, bool enable)

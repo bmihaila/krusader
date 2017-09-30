@@ -58,6 +58,8 @@ distros will probably use similar names:
 - kde-cli-tools         tools required to edit file types from Properties dialog
                         or run Krusader in root mode
 
+- keditbookmarks        Bookmark manager used for editing bookmarks
+
 - kio-extras            Enables transparent handling of various archive types
                         such as .tar and network protocols like SFTP
 
@@ -116,8 +118,8 @@ Krusader is developed in KDE Extragear. If someone wants to download and use
 the latest available Krusader sourcecode with git:
 $ git clone http://anongit.kde.org/krusader
 
-Otherwise, if someone wants to use a .tar.gz version:
-$ tar xvf krusader-xx.xx.tar.gz
+Otherwise, if someone wants to use the .tar.xz package:
+$ tar xvf krusader-xx.xx.tar.xz
 
 
 --- Some CMake options. Cmake execution

@@ -21,7 +21,9 @@
 
 // QtCore
 #include <QDir>
+#include <QSet>
 #include <QTextStream>
+#include <QtGlobal>
 
 #include <KConfigCore/KSharedConfig>
 #include <KIOCore/KProtocolManager>
@@ -36,6 +38,8 @@ QSet<QString> KrServices::isoArchiveMimetypes = QSet<QString>::fromList(KProtoco
 #else
 QSet<QString> KrServices::isoArchiveMimetypes;
 #endif
+
+QString KrServices::GLOBAL_MESSAGE_PATTERN = "%{time hh:mm:ss.zzz}-%{type} %{category} %{function}@%{line} # %{message}";
 
 QSet<QString> KrServices::generateKrarcArchiveMimetypes()
 {
@@ -292,4 +296,22 @@ QString KrServices::urlToLocalPath(const QUrl &url)
     }
 #endif
     return path;
+}
+
+static bool s_withDebugMessages;
+static QtMessageHandler s_defaultMessageHandler;
+
+void KrServices::setGlobalKrMessageHandler(bool withDebugMessages)
+{
+    s_withDebugMessages = withDebugMessages;
+    s_defaultMessageHandler = qInstallMessageHandler(0);
+    qInstallMessageHandler(&krMessageHandler);
+}
+
+void KrServices::krMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
+    // filter debug if not enabled
+    if (type != QtDebugMsg || s_withDebugMessages) {
+        s_defaultMessageHandler(type, context, msg);
+    }
 }

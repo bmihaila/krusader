@@ -324,7 +324,7 @@ void KrViewer::edit(QUrl url, Mode mode, int new_window, QWidget * parent)
         proc << cmdArgs << url.toDisplayString(QUrl::PreferLocalFile);
         if (!proc.startDetached())
             KMessageBox::sorry(krMainWindow, i18n("Can not open \"%1\"", editor));
-        return ;
+        return;
     }
 
     KrViewer* viewer = getViewer(new_window);
@@ -373,7 +373,9 @@ void KrViewer::openUrlFinished(PanelViewerBase *pvb, bool success)
                     part->widget()->setFocus();
             }
         }
-    }
+    } else {
+        tabCloseRequest(tabBar.currentIndex(), false);
+      }
 }
 
 void KrViewer::tabChanged(int index)
@@ -396,10 +398,11 @@ void KrViewer::tabChanged(int index)
 void KrViewer::tabCloseRequest(int index, bool force)
 {
     // important to save as returnFocusTo will be cleared at removePart
-    QWidget * returnFocusToThisWidget = returnFocusTo;
+    QWidget *returnFocusToThisWidget = returnFocusTo;
 
-    PanelViewerBase* pvb = static_cast<PanelViewerBase*>(tabBar.widget(index));
-    if (!pvb) return;
+    PanelViewerBase *pvb = static_cast<PanelViewerBase *>(tabBar.widget(index));
+    if (!pvb)
+        return;
 
     if (!force && !pvb->queryClose())
         return;
@@ -426,16 +429,9 @@ void KrViewer::tabCloseRequest(int index, bool force)
         }
 
         QTimer::singleShot(0, this, SLOT(close()));
-
-        return;
     } else if (tabBar.count() == 1) {
-        //no point in detaching only one tab..
+        // no point in detaching only one tab..
         detachAction->setEnabled(false);
-    }
-
-    if (returnFocusToThisWidget) {
-        returnFocusToThisWidget->raise();
-        returnFocusToThisWidget->activateWindow();
     }
 }
 

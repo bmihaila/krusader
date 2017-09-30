@@ -31,6 +31,7 @@
 #include "defaultfilesystem.h"
 
 // QtCore
+#include <QDebug>
 #include <QDir>
 #include <QEventLoop>
 
@@ -38,14 +39,17 @@
 #include <KCoreAddons/KUrlMimeData>
 #include <KI18n/KLocalizedString>
 #include <KIO/DropJob>
+#include <KIO/MkpathJob>
 #include <KIO/FileUndoManager>
-#include <KIO/ListJob>
 #include <KIO/JobUiDelegate>
+#include <KIO/ListJob>
 #include <KIOCore/KDiskFreeSpaceInfo>
 #include <KIOCore/KFileItem>
 #include <KIOCore/KMountPoint>
 #include <KIOCore/KProtocolManager>
+#include <kio_version.h>
 
+#include "fileitem.h"
 #include "../defaults.h"
 #include "../krglobal.h"
 #include "../krservices.h"
@@ -65,10 +69,12 @@ void DefaultFileSystem::copyFiles(const QList<QUrl> &urls, const QUrl &destinati
 
     KIO::JobFlags flags = showProgressInfo ? KIO::DefaultFlags : KIO::HideProgressInfo;
 
-    KrJob *krJob = KrJob::createCopyJob(mode, urls, destination, flags);
-    connect(krJob, &KrJob::started, this, [=](KIO::Job *job) { connectJob(job, dest); });
+    KrJob *krJob = KrJob::createCopyJob(mode, urls, dest, flags);
+    // destination can be a full path with filename when copying/moving a single file
+    const QUrl destDir = dest.adjusted(QUrl::RemoveFilename);
+    connect(krJob, &KrJob::started, this, [=](KIO::Job *job) { connectJobToDestination(job, destDir); });
     if (mode == KIO::CopyJob::Move) { // notify source about removed files
-        connect(krJob, &KrJob::started, this, [=](KIO::Job *job) { connectSourceFileSystem(job, urls); });
+        connect(krJob, &KrJob::started, this, [=](KIO::Job *job) { connectJobToSources(job, urls); });
     }
 
     krJobMan->manageJob(krJob, startMode);
@@ -76,49 +82,55 @@ void DefaultFileSystem::copyFiles(const QList<QUrl> &urls, const QUrl &destinati
 
 void DefaultFileSystem::dropFiles(const QUrl &destination, QDropEvent *event)
 {
+    qDebug() << "destination=" << destination;
+
     // resolve relative path before resolving symlinks
     const QUrl dest = resolveRelativePath(destination);
 
     KIO::DropJob *job = KIO::drop(event, dest);
+#if KIO_VERSION >= QT_VERSION_CHECK(5, 30, 0)
+    // NOTE: a DropJob "starts" with showing a menu. If the operation is choosen (copy/move/link)
+    // the actual CopyJob starts automatically - we cannot manage the start of the CopyJob (see
+    // documentation for KrJob)
+    connect(job, &KIO::DropJob::copyJobStarted, this, [=](KIO::CopyJob *kJob) {
+        connectJobToDestination(job, dest); // now we have to refresh the destination
+
+        KrJob *krJob = KrJob::createDropJob(job, kJob);
+        krJobMan->manageStartedJob(krJob, kJob);
+        if (kJob->operationMode() == KIO::CopyJob::Move) { // notify source about removed files
+            connectJobToSources(kJob, kJob->srcUrls());
+        }
+    });
+#else
     // NOTE: DropJob does not provide information about the actual user choice
     // (move/copy/link/abort). We have to assume the worst (move)
     connectJob(job, dest);
     connectSourceFileSystem(job, KUrlMimeData::urlsFromMimeData(event->mimeData()));
-
-    // NOTE: DrobJobs are internally recorded
-    //recordJobUndo(job, type, dst, src);
+#endif
 }
 
-void DefaultFileSystem::connectSourceFileSystem(KJob *job, const QList<QUrl> urls)
-{
-    if (!urls.isEmpty()) {
-        // NOTE: we assume that all files were in the same directory and only emit one signal for
-        // the directory of the first file URL
-        const QUrl url = urls.first().adjusted(QUrl::RemoveFilename);
-        connect(job, &KIO::Job::result, this, [=]() { emit fileSystemChanged(url); });
-    }
-}
-
-void DefaultFileSystem::addFiles(const QList<QUrl> &fileUrls, KIO::CopyJob::CopyMode mode, QString dir)
+void DefaultFileSystem::addFiles(const QList<QUrl> &fileUrls, KIO::CopyJob::CopyMode mode,
+                                 const QString &dir)
 {
     QUrl destination(_currentDirectory);
     if (!dir.isEmpty()) {
         destination.setPath(QDir::cleanPath(destination.path() + '/' + dir));
         const QString scheme = destination.scheme();
         if (scheme == "tar" || scheme == "zip" || scheme == "krarc") {
-            if (QDir(cleanUrl(destination).path()).exists())
+            if (QDir(destination.path()).exists())
                 // if we get out from the archive change the protocol
                 destination.setScheme("file");
         }
     }
 
+    destination = ensureTrailingSlash(destination); // destination is always a directory
     copyFiles(fileUrls, destination, mode);
 }
 
 void DefaultFileSystem::mkDir(const QString &name)
 {
-    KIO::SimpleJob* job = KIO::mkdir(getUrl(name));
-    connectJob(job, currentDirectory());
+    KJob *job = KIO::mkpath(getUrl(name));
+    connectJobToDestination(job, currentDirectory());
 }
 
 void DefaultFileSystem::rename(const QString &oldName, const QString &newName)
@@ -126,7 +138,7 @@ void DefaultFileSystem::rename(const QString &oldName, const QString &newName)
     const QUrl oldUrl = getUrl(oldName);
     const QUrl newUrl = getUrl(newName);
     KIO::Job *job = KIO::moveAs(oldUrl, newUrl, KIO::HideProgressInfo);
-    connectJob(job, currentDirectory());
+    connectJobToDestination(job, currentDirectory());
 
     KIO::FileUndoManager::self()->recordJob(KIO::FileUndoManager::Rename, {oldUrl}, newUrl, job);
 }
@@ -139,7 +151,11 @@ QUrl DefaultFileSystem::getUrl(const QString& name) const
         return fileItem->getUrl();
 
     QUrl absoluteUrl(_currentDirectory);
-    absoluteUrl.setPath(absoluteUrl.path() + '/' + name);
+    if (name.startsWith('/')) {
+        absoluteUrl.setPath(name);
+    } else {
+        absoluteUrl.setPath(absoluteUrl.path() + '/' + name);
+    }
     return absoluteUrl;
 }
 
@@ -151,6 +167,7 @@ void DefaultFileSystem::updateFilesystemInfo()
         return;
     }
 
+    // TODO get space info for trash:/ with KIO spaceInfo job
     if (!_currentDirectory.isLocalFile()) {
         _mountPoint = "";
         emit fileSystemInfoChanged(i18n("No space information on non-local filesystems"), "", 0, 0);
@@ -174,8 +191,9 @@ void DefaultFileSystem::updateFilesystemInfo()
 
 // ==== protected ====
 
-bool DefaultFileSystem::refreshInternal(const QUrl &directory, bool showHidden)
+bool DefaultFileSystem::refreshInternal(const QUrl &directory, bool onlyScan)
 {
+    qDebug() << "refresh internal to URL=" << directory.toDisplayString();
     if (!KProtocolManager::supportsListing(directory)) {
         emit error(i18n("Protocol not supported by Krusader:\n%1", directory.url()));
         return false;
@@ -184,14 +202,15 @@ bool DefaultFileSystem::refreshInternal(const QUrl &directory, bool showHidden)
     delete _watcher; // stop watching the old dir
 
     if (directory.isLocalFile()) {
+        qDebug() << "start local refresh to URL=" << directory.toDisplayString();
         // we could read local directories with KIO but using Qt is a lot faster!
-        return refreshLocal(directory);
+        return refreshLocal(directory, onlyScan);
     }
 
     _currentDirectory = cleanUrl(directory);
 
     // start the listing job
-    KIO::ListJob *job = KIO::listDir(_currentDirectory, KIO::HideProgressInfo, showHidden);
+    KIO::ListJob *job = KIO::listDir(_currentDirectory, KIO::HideProgressInfo, showHiddenFiles());
     connect(job, &KIO::ListJob::entries, this, &DefaultFileSystem::slotAddFiles);
     connect(job, &KIO::ListJob::redirection, this, &DefaultFileSystem::slotRedirection);
     connect(job, &KIO::ListJob::permanentRedirection, this, &DefaultFileSystem::slotRedirection);
@@ -218,9 +237,11 @@ bool DefaultFileSystem::refreshInternal(const QUrl &directory, bool showHidden)
 
 void DefaultFileSystem::slotListResult(KJob *job)
 {
+    qDebug() << "got list result";
     if (job && job->error()) {
         // we failed to refresh
         _listError = true;
+        qDebug() << "error=" << job->errorString() << "; text=" << job->errorText();
         emit error(job->errorString()); // display error message (in panel)
     }
 }
@@ -237,7 +258,7 @@ void DefaultFileSystem::slotAddFiles(KIO::Job *, const KIO::UDSEntryList& entrie
 
 void DefaultFileSystem::slotRedirection(KIO::Job *job, const QUrl &url)
 {
-   krOut << "redirection to " << url;
+   qDebug() << "redirection to URL=" << url.toDisplayString();
 
    // some protocols (zip, tar) send redirect to local URL without scheme
    const QUrl newUrl = preferLocalUrl(url);
@@ -254,11 +275,17 @@ void DefaultFileSystem::slotRedirection(KIO::Job *job, const QUrl &url)
     _currentDirectory = cleanUrl(newUrl);
 }
 
+void DefaultFileSystem::slotWatcherCreated(const QString& path)
+{
+    qDebug() << "path created (doing nothing): " << path;
+}
+
 void DefaultFileSystem::slotWatcherDirty(const QString& path)
 {
+    qDebug() << "path dirty: " << path;
     if (path == realPath()) {
         // this happens
-        //   1. if a directory was created/deleted/renamed inside this directory. No deleted
+        //   1. if a directory was created/deleted/renamed inside this directory.
         //   2. during and after a file operation (create/delete/rename/touch) inside this directory
         // KDirWatcher doesn't reveal the name of changed directories and we have to refresh.
         // (QFileSystemWatcher in Qt5.7 can't help here either)
@@ -270,7 +297,7 @@ void DefaultFileSystem::slotWatcherDirty(const QString& path)
 
     FileItem *fileItem = getFileItem(name);
     if (!fileItem) {
-        krOut << "dirty watcher file not found (unexpected): " << path;
+        qWarning() << "file not found (unexpected), path=" << path;
         // this happens at least for cifs mounted filesystems: when a new file is created, a dirty
         // signal with its file path but no other signals are sent (buggy behaviour of KDirWatch)
         refresh();
@@ -279,24 +306,26 @@ void DefaultFileSystem::slotWatcherDirty(const QString& path)
 
     // we have an updated file..
     FileItem *newFileItem = createLocalFileItem(name);
-    *fileItem = *newFileItem;
-    delete newFileItem;
-    emit updatedFileItem(fileItem);
+    addFileItem(newFileItem);
+    emit updatedFileItem(newFileItem);
+
+    delete fileItem;
 }
 
 void DefaultFileSystem::slotWatcherDeleted(const QString& path)
 {
-    if (path != realPath()) {
+    qDebug() << "path deleted: " << path;
+    if (path != _currentDirectory.toLocalFile()) {
         // ignore deletion of files here, a 'dirty' signal will be send anyway
         return;
     }
 
-    // the current directory was deleted, try a refresh, which will fail. An error message will
+    // the current directory was deleted. Try a refresh, which will fail. An error message will
     // be emitted and the empty (non-existing) directory remains.
     refresh();
 }
 
-bool DefaultFileSystem::refreshLocal(const QUrl &directory) {
+bool DefaultFileSystem::refreshLocal(const QUrl &directory, bool onlyScan) {
     const QString path = KrServices::urlToLocalPath(directory);
 
 #ifdef Q_WS_WIN
@@ -342,7 +371,7 @@ bool DefaultFileSystem::refreshLocal(const QUrl &directory) {
         name = QString::fromLocal8Bit(dirEnt->d_name);
 
         // show hidden files?
-        if (!showHidden && name.left(1) == ".") continue ;
+        if (!showHidden && name.left(1) == ".") continue;
         // we don't need the "." and ".." entries
         if (name == "." || name == "..") continue;
 
@@ -353,16 +382,18 @@ bool DefaultFileSystem::refreshLocal(const QUrl &directory) {
     QT_CLOSEDIR(dir);
     QDir::setCurrent(savedDir);
 
-    // start watching the new dir for file changes
-    _watcher = new KDirWatch(this);
-    // if the current dir is a link path the watcher needs to watch the real path - and signal
-    // parameters will be the real path
-    _watcher->addDir(realPath(), KDirWatch::WatchFiles);
-    connect(_watcher.data(), &KDirWatch::dirty, this, &DefaultFileSystem::slotWatcherDirty);
-    // NOTE: not connecting 'created' signal. A 'dirty' is send after that anyway
-    //connect(_watcher, SIGNAL(created(QString)), this, SLOT(slotWatcherCreated(QString)));
-    connect(_watcher.data(), &KDirWatch::deleted, this, &DefaultFileSystem::slotWatcherDeleted);
-    _watcher->startScan(false);
+    if (!onlyScan) {
+        // start watching the new dir for file changes
+        _watcher = new KDirWatch(this);
+        // if the current dir is a link path the watcher needs to watch the real path - and signal
+        // parameters will be the real path
+        _watcher->addDir(realPath(), KDirWatch::WatchFiles);
+        connect(_watcher.data(), &KDirWatch::dirty, this, &DefaultFileSystem::slotWatcherDirty);
+        // NOTE: not connecting 'created' signal. A 'dirty' is send after that anyway
+        //connect(_watcher, SIGNAL(created(QString)), this, SLOT(slotWatcherCreated(QString)));
+        connect(_watcher.data(), &KDirWatch::deleted, this, &DefaultFileSystem::slotWatcherDeleted);
+        _watcher->startScan(false);
+    }
 
     return true;
 }
@@ -374,6 +405,7 @@ FileItem *DefaultFileSystem::createLocalFileItem(const QString &name)
 
 QString DefaultFileSystem::DefaultFileSystem::realPath()
 {
+    // NOTE: current dir must exist
     return QDir(_currentDirectory.toLocalFile()).canonicalPath();
 }
 

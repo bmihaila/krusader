@@ -61,7 +61,6 @@
 #include "krtrashhandler.h"
 #include "krusader.h"
 #include "krusaderview.h"
-#include "krview.h"
 #include "panelmanager.h"
 
 #include "ActionMan/actionman.h"
@@ -79,23 +78,23 @@
 #include "GUI/kfnkeys.h"
 #include "GUI/krusaderstatus.h"
 #include "GUI/mediabutton.h"
-#include "GUI/syncbrowsebutton.h"
 #include "GUI/terminaldock.h"
-#include "Konfigurator/konfigurator.h"
 #include "KViewer/krviewer.h"
+#include "Konfigurator/konfigurator.h"
 #include "Locate/locate.h"
 #include "MountMan/kmountman.h"
-#include "Panel/krviewfactory.h"
-#include "Panel/krviewitem.h"
-#include "Panel/krselectionmode.h"
+#include "Panel/PanelView/krselectionmode.h"
+#include "Panel/PanelView/krview.h"
+#include "Panel/PanelView/krviewfactory.h"
+#include "Panel/PanelView/krviewitem.h"
 #include "Panel/listpanel.h"
 #include "Panel/panelfunc.h"
-#include "Panel/panelpopup.h"
-#include "Search/krsearchmod.h"
+#include "Panel/sidebar.h"
 #include "Search/krsearchdialog.h"
+#include "Search/krsearchmod.h"
 #include "Splitter/combiner.h"
-#include "Splitter/splittergui.h"
 #include "Splitter/splitter.h"
+#include "Splitter/splittergui.h"
 
 #ifdef SYNCHRONIZER_ENABLED
     #include "Synchronizer/synchronizergui.h"
@@ -348,8 +347,8 @@ void KRslots::configChanged(bool isGUIRestartNeeded)
 
     if (showHidden != KrActions::actToggleHidden->isChecked()) {
         KrActions::actToggleHidden->setChecked(showHidden);
-        MAIN_VIEW->leftManager()->refreshAllTabs();
-        MAIN_VIEW->rightManager()->refreshAllTabs();
+        MAIN_VIEW->leftManager()->reloadConfig();
+        MAIN_VIEW->rightManager()->reloadConfig();
     }
 }
 
@@ -358,8 +357,8 @@ void KRslots::showHiddenFiles(bool show)
     KConfigGroup group(krConfig, "Look&Feel");
     group.writeEntry("Show Hidden", show);
 
-    MAIN_VIEW->leftManager()->refreshAllTabs();
-    MAIN_VIEW->rightManager()->refreshAllTabs();
+    MAIN_VIEW->leftManager()->reloadConfig();
+    MAIN_VIEW->rightManager()->reloadConfig();
 }
 
 void KRslots::swapPanels()
@@ -518,7 +517,7 @@ void KRslots::slotSplit()
 
     if (ACTIVE_FUNC->files()->getFileItem(name)->isDir()) {
         KMessageBox::sorry(krApp, i18n("You cannot split a folder."));
-        return ;
+        return;
     }
 
     const QUrl destDir = ACTIVE_PANEL->otherPanel()->virtualPath();
@@ -559,7 +558,7 @@ void KRslots::slotCombine()
 
         if (ACTIVE_FUNC->files()->getFileItem(*it)->isDir()) {
             KMessageBox::sorry(krApp, i18n("You cannot combine a folder."));
-            return ;
+            return;
         }
 
         if (!unixStyle) {
@@ -655,7 +654,9 @@ void KRslots::manageUseractions()
 #ifdef SYNCHRONIZER_ENABLED
 void KRslots::slotSynchronizeDirs(QStringList selected)
 {
-    new SynchronizerGUI(0, LEFT_PANEL->virtualPath(), RIGHT_PANEL->virtualPath(), selected);
+    SynchronizerGUI *synchronizerDialog = new SynchronizerGUI(MAIN_VIEW, LEFT_PANEL->virtualPath(),
+                                                              RIGHT_PANEL->virtualPath(), selected);
+    synchronizerDialog->show(); // destroyed on close
 }
 #endif
 
@@ -686,7 +687,8 @@ void KRslots::execTypeSetup()
 
 void KRslots::slotDiskUsage()
 {
-    DiskUsageGUI du(ACTIVE_PANEL->virtualPath(), MAIN_VIEW);
+    DiskUsageGUI *diskUsageDialog = new DiskUsageGUI(ACTIVE_PANEL->virtualPath());
+    diskUsageDialog->askDirAndShow();
 }
 
 void KRslots::applicationStateChanged()

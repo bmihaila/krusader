@@ -78,9 +78,8 @@ class KrViewItem;
 class ListPanelActions;
 class ListPanelFunc;
 class MediaButton;
-class PanelPopup;
+class Sidebar;
 class SizeCalculator;
-class SyncBrowseButton;
 
 class ListPanel : public QWidget, public KrPanel
 {
@@ -133,7 +132,7 @@ public slots:
     void slotUpdateTotals();
     // react to file changes in filesystem (path change or refresh)
     void slotStartUpdate(bool directoryChange);
-    void togglePanelPopup();
+    void toggleSidebar();
     void panelVisible(); // called when the panel becomes active
     void panelHidden(); // called when panel becomes inactive
     void refreshColors();
@@ -214,7 +213,7 @@ protected:
 
     QPixmap currDragPix;
     QWidget *clientArea;
-    QSplitter *splt;
+    QSplitter *sidebarSplitter;
     KUrlNavigator* urlNavigator;
     KrSearchBar* searchBar;
     QToolButton *backButton, *forwardButton;
@@ -222,9 +221,9 @@ protected:
     QToolButton *cdHomeButton;
     QToolButton *cdUpButton;
     QToolButton *cdOtherButton;
-    QToolButton *popupPositionBtn;
-    QToolButton *popupBtn;
-    PanelPopup *popup; // lazy initialized
+    QToolButton *sidebarPositionButton;
+    QToolButton *sidebarButton;
+    Sidebar *sidebar; // lazy initialized
     KrBookmarkButton *bookmarksButton;
     KrSqueezedTextLabel *status, *totals, *freeSpace;
 
@@ -233,20 +232,20 @@ protected:
     QProgressBar *previewProgress;
     DirHistoryButton* historyButton;
     MediaButton *mediaButton;
-    SyncBrowseButton *syncBrowseButton;
+    QToolButton *syncBrowseButton;
     QToolButton *cancelProgressButton; // for thumbnail previews and filesystem refresh
     KrErrorDisplay *fileSystemError;
 
 private:
     bool handleDropInternal(QDropEvent *event, const QString &dir);
-    int popupPosition() const; // 0: West, 1: North, 2: East, 3: South
-    void setPopupPosition(int);
+    int sidebarPosition() const; // 0: West, 1: North, 2: East, 3: South
+    void setSidebarPosition(int);
     void connectQuickSizeCalculator(SizeCalculator *sizeCalculator);
 
 private:
     QUrl _navigatorUrl; // distinguish between new user set URL and new custom set URL
     bool _locked;
-    QList<int> popupSizes;
+    QList<int> sidebarSplitterSizes;
 };
 
 #endif

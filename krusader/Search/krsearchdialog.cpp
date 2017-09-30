@@ -55,16 +55,17 @@
 #include "../Dialogs/krdialogs.h"
 #include "../Dialogs/krspecialwidgets.h"
 #include "../Dialogs/krsqueezedtextlabel.h"
+#include "../FileSystem/fileitem.h"
 #include "../FileSystem/krquery.h"
 #include "../FileSystem/virtualfilesystem.h"
 #include "../Filter/filtertabs.h"
 #include "../Filter/generalfilter.h"
 #include "../KViewer/krviewer.h"
+#include "../Panel/PanelView/krview.h"
+#include "../Panel/PanelView/krviewfactory.h"
+#include "../Panel/PanelView/krviewitem.h"
 #include "../Panel/krpanel.h"
 #include "../Panel/krsearchbar.h"
-#include "../Panel/krview.h"
-#include "../Panel/krviewfactory.h"
-#include "../Panel/krviewitem.h"
 #include "../Panel/panelfunc.h"
 #include "../defaults.h"
 #include "../kicons.h"
@@ -602,7 +603,7 @@ void KrSearchDialog::contextMenu(const QPoint &pos)
 void KrSearchDialog::feedToListBox()
 {
     VirtualFileSystem virtFilesystem;
-    virtFilesystem.refresh(QUrl::fromLocalFile("/"));
+    virtFilesystem.scanDir(QUrl::fromLocalFile("/"));
 
     KConfigGroup group(krConfig, "Search");
     int listBoxNum = group.readEntry("Feed To Listbox Counter", 1);
@@ -639,8 +640,8 @@ void KrSearchDialog::feedToListBox()
 
     isBusy = true;
 
-    QUrl url = QUrl(QString("virt:/") + fileSystemName);
-    virtFilesystem.refresh(url);
+    const QUrl url = QUrl(QString("virt:/") + fileSystemName);
+    virtFilesystem.scanDir(url);
     virtFilesystem.addFiles(urlList);
     virtFilesystem.setMetaInformation(queryName);
     //ACTIVE_FUNC->openUrl(url);

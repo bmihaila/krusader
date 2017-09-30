@@ -27,11 +27,13 @@
 #endif
 
 // QtCore
+#include <QDebug>
 #include <QDir>
 
 #include <KIOCore/KMountPoint>
 
 #include "defaultfilesystem.h"
+#include "fileitem.h"
 #include "virtualfilesystem.h"
 #include "../krservices.h"
 #include "../JobMan/jobman.h"
@@ -49,25 +51,30 @@ void FileSystemProvider::startCopyFiles(const QList<QUrl> &urls, const QUrl &des
                                   KIO::CopyJob::CopyMode mode, bool showProgressInfo,
                                   JobMan::StartMode startMode)
 {
-    const FileSystem::FS_TYPE type = getFilesystemType(destination);
-    FileSystem *fs;
-    switch (type) {
-    case FileSystem::FS_VIRTUAL:
-        if (!_virtFileSystem)
-            _virtFileSystem = createFilesystem(type);
-        fs = _virtFileSystem;
-        break;
-    default:
-        if (!_defaultFileSystem)
-            _defaultFileSystem = createFilesystem(type);
-        fs = _defaultFileSystem;
-    }
-
+    FileSystem *fs = getFilesystemInstance(destination);
     fs->copyFiles(urls, destination, mode, showProgressInfo, startMode);
 }
 
-void FileSystemProvider::refreshFilesystem(const QUrl &directory)
+void FileSystemProvider::startDropFiles(QDropEvent *event, const QUrl &destination)
 {
+    FileSystem *fs = getFilesystemInstance(destination);
+    fs->dropFiles(destination, event);
+}
+
+void FileSystemProvider::startDeleteFiles(const QList<QUrl> &urls, bool moveToTrash)
+{
+    if (urls.isEmpty())
+        return;
+
+    // assume all URLs use the same filesystem
+    FileSystem *fs = getFilesystemInstance(urls.first());
+    fs->deleteAnyFiles(urls, moveToTrash);
+}
+
+void FileSystemProvider::refreshFilesystems(const QUrl &directory, bool removed)
+{
+    qDebug() << "changed=" << directory.toDisplayString();
+
     QMutableListIterator<QPointer<FileSystem>> it(_fileSystems);
     while (it.hasNext()) {
         if (it.next().isNull()) {
@@ -83,18 +90,36 @@ void FileSystemProvider::refreshFilesystem(const QUrl &directory)
     }
 
     for(QPointer<FileSystem> fileSystemPointer: _fileSystems) {
-        // always refresh filesystems showing a virtual directory; it can contain files from various
-        // places, we don't know if they were (re)moved, refreshing is also fast enough
         FileSystem *fs = fileSystemPointer.data();
+        // refresh all filesystems currently showing this directory
+        // and always refresh filesystems showing a virtual directory; it can contain files from
+        // various places, we don't know if they were (re)moved. Refreshing is also fast enough.
         const QUrl fileSystemDir = fs->currentDirectory();
-        if ((fileSystemDir == FileSystem::cleanUrl(directory) || (fileSystemDir.scheme() == "virt" && !fs->isRoot()))
-            && !fs->hasAutoUpdate()) {
-            // refresh all filesystem currently showing this directory...
+        if ((!fs->hasAutoUpdate() && (fileSystemDir == FileSystem::cleanUrl(directory) ||
+                                      (fileSystemDir.scheme() == "virt" && !fs->isRoot())))
+            // also refresh if a parent directory was (re)moved (not detected by file watcher)
+            || (removed && directory.isParentOf(fileSystemDir))) {
             fs->refresh();
-        } else if (!mountPoint.isEmpty() && mountPoint == fs->mountPoint()) {
             // ..or refresh filesystem info if mount point is the same (for free space update)
+        } else if (!mountPoint.isEmpty() && mountPoint == fs->mountPoint()) {
             fs->updateFilesystemInfo();
         }
+    }
+}
+
+FileSystem *FileSystemProvider::getFilesystemInstance(const QUrl &directory)
+{
+    const FileSystem::FS_TYPE type = getFilesystemType(directory);
+    switch (type) {
+    case FileSystem::FS_VIRTUAL:
+        if (!_virtFileSystem)
+            _virtFileSystem = createFilesystem(type);
+        return _virtFileSystem;
+        break;
+    default:
+        if (!_defaultFileSystem)
+            _defaultFileSystem = createFilesystem(type);
+        return _defaultFileSystem;
     }
 }
 
@@ -108,7 +133,7 @@ FileSystem *FileSystemProvider::createFilesystem(FileSystem::FS_TYPE type)
 
     QPointer<FileSystem> fileSystemPointer(newFilesystem);
     _fileSystems.append(fileSystemPointer);
-    connect(newFilesystem, &FileSystem::fileSystemChanged, this, &FileSystemProvider::refreshFilesystem);
+    connect(newFilesystem, &FileSystem::fileSystemChanged, this, &FileSystemProvider::refreshFilesystems);
     return newFilesystem;
 }
 

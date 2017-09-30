@@ -35,9 +35,10 @@
 #include <QAbstractEventDispatcher>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QDebug>
+#include <QDir>
 #include <QEventLoop>
 #include <QStandardPaths>
-#include <QDir>
 // QtGui
 #include <QPixmap>
 // QtDBus
@@ -55,13 +56,13 @@
 
 #include "../Archive/krarchandler.h"
 
+#include "defaults.h"
+#include "krservices.h"
+#include "krslots.h"
 #include "krusader.h"
+#include "krusaderversion.h"
 #include "krusaderview.h"
 #include "panelmanager.h"
-#include "krusaderversion.h"
-#include "krslots.h"
-#include "defaults.h"
-#include "Panel/krviewfactory.h"
 
 static const char *description = I18N_NOOP("Krusader\nTwin-Panel File Manager by KDE");
 
@@ -131,6 +132,9 @@ int main(int argc, char *argv[])
         argv = myArgv;
     }*/
 // ============ end icon-stuff ===========
+
+    // set global log message format
+    qSetMessagePattern(KrServices::GLOBAL_MESSAGE_PATTERN);
 
     // prevent qt5-webengine crashing
     QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
@@ -240,11 +244,15 @@ int main(int argc, char *argv[])
     parser.addOption(QCommandLineOption(QStringList() << QLatin1String("left"), i18n("Start left panel at <path>"), QLatin1String("path")));
     parser.addOption(QCommandLineOption(QStringList() << QLatin1String("right"), i18n("Start right panel at <path>"), QLatin1String("path")));
     parser.addOption(QCommandLineOption(QStringList() << QLatin1String("profile"), i18n("Load this profile on startup"), QLatin1String("panel-profile")));
+    parser.addOption(QCommandLineOption(QStringList() << "d" << QLatin1String("debug"), i18n("Enable debug output")));
     parser.addPositionalArgument(QLatin1String("url"), i18n("URL to open"));
 
     // check for command line arguments
     parser.process(app);
     aboutData.processCommandLine(&parser);
+
+    // set global message handler
+    KrServices::setGlobalKrMessageHandler(parser.isSet("debug"));
 
     KConfigGroup cfg(KSharedConfig::openConfig(), QStringLiteral("Look&Feel"));
     bool singleInstanceMode = cfg.readEntry("Single Instance Mode", _SingleInstanceMode);
@@ -277,7 +285,6 @@ int main(int argc, char *argv[])
 
         if (reply.isValid() && (bool)reply) {
             KStartupInfo::appStarted();
-            QStringList tabs;
             if (parser.isSet("left"))
                 openTabsRemote(parser.value("left").split(','), true, appName);
             if (parser.isSet("right"))
@@ -325,7 +332,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "DBus Error: %s, %s\n", dbus.lastError().name().toLocal8Bit().constData(), dbus.lastError().message().toLocal8Bit().constData());
     }
 
-
+    qDebug() << "Qt icon theme: " << QIcon::themeName();
 
     // catching SIGTERM, SIGHUP, SIGQUIT
     signal(SIGTERM, sigterm_handler);
@@ -341,5 +348,4 @@ int main(int argc, char *argv[])
     }
     // let's go.
     return app.exec();
-
 }

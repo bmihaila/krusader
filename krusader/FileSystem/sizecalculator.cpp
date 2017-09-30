@@ -19,12 +19,13 @@
 #include "sizecalculator.h"
 
 // QtCore
+#include <QDebug>
 #include <QTimer>
 
 #include <KIO/StatJob>
 
+#include "fileitem.h"
 #include "virtualfilesystem.h"
-#include "../krglobal.h"
 
 SizeCalculator::SizeCalculator(const QList<QUrl> &urls)
     : QObject(nullptr), m_urls(urls), m_nextUrls(urls), m_totalSize(0), m_totalFiles(0),
@@ -96,8 +97,8 @@ void SizeCalculator::nextUrl()
     if (m_currentUrl.scheme() == "virt") {
         // calculate size of all files/directories in this virtual directory
         VirtualFileSystem *fs = new VirtualFileSystem();
-        if (!fs->refresh(m_currentUrl)) {
-            krOut << "cannot refresh virtual fs, url=" << m_currentUrl;
+        if (!fs->scanDir(m_currentUrl)) {
+            qWarning() << "cannot scan virtual FS, URL=" << m_currentUrl.toDisplayString();
             nextUrl();
             return;
         }
@@ -132,7 +133,7 @@ void SizeCalculator::slotStatResult(KJob *job)
         return;
 
     if (job->error()) {
-        krOut << "stat job failed";
+        qWarning() << "stat job failed, error=" << job->error() << "; error string=" << job->errorString();
         nextSubUrl();
         return;
     }
@@ -160,7 +161,9 @@ void SizeCalculator::slotDirectorySizeResult(KJob *)
 {
     if (!m_directorySizeJob->error()) {
         m_totalSize += m_directorySizeJob->totalSize();
-        m_currentUrlSize += m_directorySizeJob->totalSize();
+        // do not count filesystem size of empty directories for this current directory
+        m_currentUrlSize +=
+            m_directorySizeJob->totalFiles() == 0 ? 0 : m_directorySizeJob->totalSize();
         m_totalFiles += m_directorySizeJob->totalFiles();
         m_totalDirs += m_directorySizeJob->totalSubdirs();
     }

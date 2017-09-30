@@ -35,6 +35,7 @@
 #include <KIOCore/KFileItem>
 #include <KWidgetsAddons/KMessageBox>
 
+#include "fileitem.h"
 #include "../defaults.h"
 #include "../krglobal.h"
 #include "../krservices.h"
@@ -76,7 +77,7 @@ void VirtualFileSystem::copyFiles(const QList<QUrl> &urls, const QUrl &destinati
         }
     }
 
-    emit fileSystemChanged(QUrl("virt:///" + dir)); // may call refresh()
+    emit fileSystemChanged(QUrl("virt:///" + dir), false); // may call refresh()
 }
 
 void VirtualFileSystem::dropFiles(const QUrl &destination, QDropEvent *event)
@@ -86,7 +87,8 @@ void VirtualFileSystem::dropFiles(const QUrl &destination, QDropEvent *event)
     copyFiles(urls, destination);
 }
 
-void VirtualFileSystem::addFiles(const QList<QUrl> &fileUrls, KIO::CopyJob::CopyMode /*mode*/, QString dir)
+void VirtualFileSystem::addFiles(const QList<QUrl> &fileUrls, KIO::CopyJob::CopyMode /*mode*/,
+                                 const QString &dir)
 {
     QUrl destination(_currentDirectory);
     if (!dir.isEmpty()) {
@@ -115,7 +117,7 @@ void VirtualFileSystem::remove(const QStringList &fileNames)
         }
     }
 
-    emit fileSystemChanged(currentDirectory()); // will call refresh()
+    emit fileSystemChanged(currentDirectory(), true); // will call refresh()
 }
 
 QUrl VirtualFileSystem::getUrl(const QString &name) const
@@ -137,7 +139,7 @@ void VirtualFileSystem::mkDir(const QString &name)
 
     mkDirInternal(name);
 
-    emit fileSystemChanged(currentDirectory()); // will call refresh()
+    emit fileSystemChanged(currentDirectory(), false); // will call refresh()
 }
 
 void VirtualFileSystem::rename(const QString &fileName, const QString &newName)
@@ -166,7 +168,7 @@ void VirtualFileSystem::rename(const QString &fileName, const QString &newName)
 
     KIO::Job *job = KIO::moveAs(item->getUrl(), dest, KIO::HideProgressInfo);
     connect(job, &KIO::Job::result, this, [=](KJob* job) { slotJobResult(job, false); });
-    connect(job, &KIO::Job::result, this, [=]() { emit fileSystemChanged(currentDirectory()); });
+    connect(job, &KIO::Job::result, this, [=]() { emit fileSystemChanged(currentDirectory(), false); });
 }
 
 bool VirtualFileSystem::canMoveToTrash(const QStringList &fileNames) const
@@ -189,7 +191,7 @@ void VirtualFileSystem::setMetaInformation(const QString &info)
 
 // ==== protected ====
 
-bool VirtualFileSystem::refreshInternal(const QUrl &directory, bool /*showHidden*/)
+bool VirtualFileSystem::refreshInternal(const QUrl &directory, bool onlyScan)
 {
     _currentDirectory = cleanUrl(directory);
     _currentDirectory.setHost("");
@@ -197,19 +199,26 @@ bool VirtualFileSystem::refreshInternal(const QUrl &directory, bool /*showHidden
     _currentDirectory.setPath('/' + _currentDirectory.path().remove('/'));
 
     if (!_virtFilesystemDict.contains(currentDir())) {
-        // NOTE: silently creating non-existing directories here. The search and locate tools expect
-        // this. (And user can enter some directory and it will be created).
-        mkDirInternal(currentDir());
-        save();
-        // infinite loop possible
-        //emit fileSystemChanged(currentDirectory());
-        return true;
+        if (onlyScan) {
+            return false; // virtual dir does not exist
+        } else {
+            // Silently creating non-existing directories here. The search and locate tools
+            // expect this. And the user can enter some directory and it will be created.
+            mkDirInternal(currentDir());
+            save();
+            // infinite loop possible
+            // emit fileSystemChanged(currentDirectory());
+            return true;
+        }
     }
 
     QList<QUrl> *urlList = _virtFilesystemDict[currentDir()];
 
-    const QString metaInfo = _metaInfoDict[currentDir()];
-    emit fileSystemInfoChanged(metaInfo.isEmpty() ? i18n("Virtual filesystem") : metaInfo, "", 0, 0);
+    if (!onlyScan) {
+        const QString metaInfo = _metaInfoDict[currentDir()];
+        emit fileSystemInfoChanged(metaInfo.isEmpty() ? i18n("Virtual filesystem") : metaInfo,
+                                   "", 0, 0);
+    }
 
     QMutableListIterator<QUrl> it(*urlList);
     while (it.hasNext()) {

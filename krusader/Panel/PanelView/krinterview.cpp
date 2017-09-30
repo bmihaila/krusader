@@ -20,11 +20,13 @@
 
 #include "krinterview.h"
 
-#include "krcolorcache.h"
+#include <QDebug>
+
 #include "krmousehandler.h"
-#include "krpreviews.h"
 #include "listmodel.h"
 #include "krviewitem.h"
+#include "../krpreviews.h"
+#include "../krcolorcache.h"
 #include "../FileSystem/dirlisterinterface.h"
 #include "../FileSystem/fileitem.h"
 
@@ -211,6 +213,7 @@ KrViewItem * KrInterView::getKrViewItem(const QModelIndex & ndx)
 
 void KrInterView::makeCurrentVisible()
 {
+    qDebug() << "scroll to current index=" << _itemView->currentIndex();
     _itemView->scrollTo(_itemView->currentIndex());
 }
 
@@ -221,6 +224,7 @@ void KrInterView::makeItemVisible(const KrViewItem *item)
 
     FileItem* fileitem = (FileItem *)item->getFileItem();
     QModelIndex ndx = _model->fileItemIndex(fileitem);
+    qDebug() << "scroll to item name=" << fileitem->getName();
     if (ndx.isValid())
         _itemView->scrollTo(ndx);
 }
@@ -304,11 +308,6 @@ void KrInterView::preDelItem(KrViewItem *item)
     if (ndx.isValid())
         _itemView->setCurrentIndex(ndx);
     _itemHash.remove((FileItem *)item->getFileItem());
-}
-
-void KrInterView::preUpdateItem(FileItem *fileitem)
-{
-    _model->updateItem(fileitem);
 }
 
 void KrInterView::prepareForActive()

@@ -17,8 +17,8 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA *
  *****************************************************************************/
 
-#ifndef KRPOPUPMENU_H
-#define KRPOPUPMENU_H
+#ifndef PANELCONTEXTMENU_H
+#define PANELCONTEXTMENU_H
 
 // QtWidgets
 #include <QMenu>
@@ -26,20 +26,22 @@
 #include <KService/KService>
 #include <KIOWidgets/KFileItemActions>
 
-#include "krpreviewpopup.h"
-
-class KActionCollection;
 class KrPanel;
 
-// should be renamed to KrContextMenu or similar
-class KrPopupMenu : public QMenu
+
+/**
+ * The right-click context menu for files and folders in the panel view.
+ *
+ * An instance is created each time a menu is shown.
+ */
+class PanelContextMenu : public QMenu
 {
     Q_OBJECT
 public:
     static void run(const QPoint &pos, KrPanel *panel);
 
-protected:
-    explicit KrPopupMenu(KrPanel *thePanel, QWidget *parent = 0);
+private:
+    explicit PanelContextMenu(KrPanel *thePanel, QWidget *parent = 0);
     void performAction(int id);
     void addEmptyMenuEntries(); // adds the choices for a menu without selected items
     void addCreateNewMenu(); // adds a "create new" submenu
@@ -48,7 +50,6 @@ protected:
     enum ID {
         OPEN_ID,
         BROWSE_ID,
-        OPEN_WITH_ID,
         OPEN_KONQ_ID,
         OPEN_TERM_ID,
         OPEN_TAB_ID,
@@ -58,7 +59,6 @@ protected:
         DELETE_ID,
         COPY_ID,
         MOVE_ID,
-        RENAME_ID,
         PROPERTIES_ID,
         MOUNT_ID,
         UNMOUNT_ID,
@@ -70,25 +70,17 @@ protected:
         RESTORE_TRASHED_FILE_ID,
         SYNC_SELECTED_ID,
         SEND_BY_EMAIL_ID,
-        LINK_HANDLING_ID,
         EJECT_ID,
-        COPY_CLIP_ID,
-        MOVE_CLIP_ID,
-        PASTE_CLIP_ID,
         MKDIR_ID,
         NEW_TEXT_FILE_ID,
-        CREATE_NEW_ID,
         SERVICE_LIST_ID // ALWAYS KEEP THIS ONE LAST!!!
     };
 
 private:
-    KrPanel *panel;
-    bool empty, multipleSelections;
-    QMenu openWith, linkPopup, createNewPopup;
-    KrPreviewPopup preview;
+    KrPanel *const panel;
     KFileItemList _items;
     KService::List offers;
-    KFileItemActions fileItemActions;
+
 };
 
 #endif

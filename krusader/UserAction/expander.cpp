@@ -24,7 +24,7 @@
 #include "../panelmanager.h"
 #include "../Panel/listpanel.h"
 #include "../Panel/panelfunc.h"
-#include "../Panel/krview.h"
+#include "../Panel/PanelView/krview.h"
 #include "../Search/krsearchdialog.h"
 #include "../GUI/profilemanager.h"
 #include "../FileSystem/filesystemprovider.h"
@@ -361,23 +361,21 @@ TagString exp_Current::expFunc(const KrPanel* panel, const QStringList& paramete
     NEED_PANEL
 
     QString item = panel->view->getCurrentItem();
+    if (item == "..") {
+        // if ".." is current, treat this as nothing is current
+        return QString();
+    }
 
     QString result;
-
     if (parameter.count() > 0 && parameter[0].toLower() == "yes")    // omit the current path
         result = item;
     else {
-        QUrl url = panel->func->files()->getUrl(item);
-        if (useUrl)
-            result = url.url();
-        else
-            result = url.path();
+        const QUrl url = panel->func->files()->getUrl(item);
+        result = useUrl ? url.url() : url.path();
     }
 
-    if (parameter.count() > 1 && parameter[1].toLower() == "no")    // don't escape spaces
-        return result;
-    else
-        return bashquote(result);
+    const bool escapeSpaces = parameter.count() < 2 || parameter[1].toLower() != "no";
+    return escapeSpaces ? bashquote(result) : result;
 }
 
 exp_List::exp_List()
@@ -572,7 +570,8 @@ TagString exp_Ask::expFunc(const KrPanel*, const QStringList& parameter, const b
     if (ok)
         return result;
     else {
-        setError(exp, Error(Error::exp_S_ERROR, Error::exp_C_USER, "User cancelled"));
+        // user cancelled
+        setError(exp, Error(Error::exp_S_ERROR, Error::exp_C_USER));
         return QString();
     }
 }
@@ -588,7 +587,7 @@ exp_Clipboard::exp_Clipboard()
 }
 TagString exp_Clipboard::expFunc(const KrPanel*, const TagStringList& parameter, const bool&, Expander& exp) const
 {
-//    qDebug() << "Expander::exp_Clipboard, parameter[0]: '" << parameter[0] << "', Clipboard: " << QApplication::clipboard()->text() << endl;
+//    qDebug() << "Expander::exp_Clipboard, parameter[0]: '" << parameter[0] << "', Clipboard: " << QApplication::clipboard()->text();
     if (parameter.count() == 0) {
         setError(exp, Error(Error::exp_S_FATAL, Error::exp_C_ARGUMENT, i18n("Expander: at least 1 parameter is required for Clipboard.")));
         return QString();
@@ -624,23 +623,29 @@ TagString exp_Copy::expFunc(const KrPanel*, const TagStringList& parameter, cons
     }
 
     // basically the parameter can already be used as URL, but since QUrl has problems with ftp-proxy-urls (like ftp://username@proxyusername@url...) this is neccesary:
-    QStringList lst = splitEach(parameter[0]);
+    const QStringList sourceList = splitEach(parameter[0]);
+    QList<QUrl> sourceURLs;
+    for (const QString source : sourceList) {
+        sourceURLs.append(QUrl::fromUserInput(source, QString(), QUrl::AssumeLocalFile));
+    }
+
     if (!parameter[1].isSimple()) {
         setError(exp, Error(Error::exp_S_FATAL, Error::exp_C_SYNTAX, i18n("Expander: %Each% may not be in the second argument of %Copy%")));
         return QString();
     }
-    QList<QUrl> src;
-    for (QStringList::const_iterator it = lst.constBegin(), end = lst.constEnd();it != end;++it)
-        src.push_back(QUrl::fromUserInput(*it, QString(), QUrl::AssumeLocalFile));
-    // or transform(...) ?
-    QUrl dest = QUrl::fromUserInput(parameter[1].string(), QString(), QUrl::AssumeLocalFile);
 
-    if (!dest.isValid() || find_if(src.constBegin(), src.constEnd(), not1(mem_fun_ref(&QUrl::isValid))) != src.constEnd()) {
+    // or transform(...) ?
+    const QUrl dest = QUrl::fromUserInput(parameter[1].string(), QString(), QUrl::AssumeLocalFile);
+
+    if (!dest.isValid() ||
+        find_if(sourceURLs.constBegin(),
+                sourceURLs.constEnd(),
+                not1(mem_fun_ref(&QUrl::isValid))) != sourceURLs.constEnd()) {
         setError(exp, Error(Error::exp_S_FATAL, Error::exp_C_ARGUMENT, i18n("Expander: invalid URLs in %_Copy(\"src\", \"dest\")%")));
         return QString();
     }
 
-    FileSystemProvider::instance().startCopyFiles(src, dest);
+    FileSystemProvider::instance().startCopyFiles(sourceURLs, dest);
 
     return QString();  // this doesn't return everything, that's normal!
 }
@@ -699,7 +704,8 @@ TagString exp_Sync::expFunc(const KrPanel*, const QStringList& parameter, const 
         return QString();
     }
 
-    new SynchronizerGUI(0, parameter[0]);
+    SynchronizerGUI *synchronizerDialog = new SynchronizerGUI(MAIN_VIEW, parameter[0]);
+    synchronizerDialog->show(); // destroyed on close
 
     return QString();  // this doesn't return everything, that's normal!
 }
@@ -802,34 +808,32 @@ TagString exp_ColSort::expFunc(const KrPanel* panel, const QStringList& paramete
 
     if (parameter[0].toLower() == "name") {
         column = KrViewProperties::Name;
-    } else
-        if (parameter[0].toLower() == "ext") {
-            column = KrViewProperties::Ext;
-        } else
-            if (parameter[0].toLower() == "type") {
-                column = KrViewProperties::Type;
-            } else
-                if (parameter[0].toLower() == "size") {
-                    column = KrViewProperties::Size;
-                } else
-                    if (parameter[0].toLower() == "modified") {
-                        column = KrViewProperties::Modified;
-                    } else
-                        if (parameter[0].toLower() == "perms") {
-                            column = KrViewProperties::Permissions;
-                        } else
-                            if (parameter[0].toLower() == "rwx") {
-                                column = KrViewProperties::KrPermissions;
-                            } else
-                                if (parameter[0].toLower() == "owner") {
-                                    column = KrViewProperties::Owner;
-                                } else
-                                    if (parameter[0].toLower() == "group") {
-                                        column = KrViewProperties::Group;
-                                    } else {
-                                        setError(exp, Error(Error::exp_S_WARNING, Error::exp_C_ARGUMENT, i18n("Expander: unknown column specified for %_ColSort(%1)%", parameter[0])));
-                                        return QString();
-                                    }
+    } else if (parameter[0].toLower() == "ext") {
+        column = KrViewProperties::Ext;
+    } else if (parameter[0].toLower() == "type") {
+        column = KrViewProperties::Type;
+    } else if (parameter[0].toLower() == "size") {
+        column = KrViewProperties::Size;
+    } else if (parameter[0].toLower() == "modified") {
+        column = KrViewProperties::Modified;
+    } else if (parameter[0].toLower() == "changed") {
+        column = KrViewProperties::Changed;
+    } else if (parameter[0].toLower() == "accessed") {
+        column = KrViewProperties::Accessed;
+    } else if (parameter[0].toLower() == "perms") {
+        column = KrViewProperties::Permissions;
+    } else if (parameter[0].toLower() == "rwx") {
+        column = KrViewProperties::KrPermissions;
+    } else if (parameter[0].toLower() == "owner") {
+        column = KrViewProperties::Owner;
+    } else if (parameter[0].toLower() == "group") {
+        column = KrViewProperties::Group;
+    } else {
+        setError(exp, Error(Error::exp_S_WARNING, Error::exp_C_ARGUMENT,
+                            i18n("Expander: unknown column specified for %_ColSort(%1)%",
+                                 parameter[0])));
+        return QString();
+    }
 
     bool descending = panel->view->properties()->sortOptions & KrViewProperties::Descending;
 
@@ -1022,7 +1026,7 @@ void Expander::expand(const QString& stringToExpand, bool useUrl)
     else
         resultList.append(result.string());
 
-//    krOut << resultList[0] << endl;
+//    qWarning() << resultList[0];
 }
 
 TagString Expander::expandCurrent(const QString& stringToExpand, bool useUrl)
@@ -1046,7 +1050,7 @@ TagString Expander::expandCurrent(const QString& stringToExpand, bool useUrl)
 
         // get the expression, and expand it using the correct expander function
         exp = stringToExpand.mid(begin + 1, end - begin - 1);
-//       qDebug() << "------------- exp: '" << exp << "'" << endl;
+//       qDebug() << "------------- exp: '" << exp << "'";
         if (exp.isEmpty())
             result += QString(QChar('%'));
         else {
@@ -1057,13 +1061,13 @@ TagString Expander::expandCurrent(const QString& stringToExpand, bool useUrl)
             exp.replace(0, 1, "");
             for (i = 0; i < placeholderCount(); ++i)
                 if (exp == placeholder(i)->expression()) {
-//               qDebug() << "---------------------------------------" << endl;
+//               qDebug() << "---------------------------------------";
                     tmpResult = placeholder(i)->expFunc(getPanel(panelIndicator, placeholder(i), *this), parameter, useUrl, *this);
                     if (error()) {
                         return QString();
                     } else
                         result += tmpResult;
-//               qDebug() << "---------------------------------------" << endl;
+//               qDebug() << "---------------------------------------";
                     break;
                 }
             if (i == placeholderCount()) {   // didn't find an expander
@@ -1075,14 +1079,14 @@ TagString Expander::expandCurrent(const QString& stringToExpand, bool useUrl)
     }
     // copy the rest of the string
     result += stringToExpand.mid(idx);
-//    qDebug() << "============== result '" << result << "'" << endl;
+//    qDebug() << "============== result '" << result << "'";
     return result;
 }
 
 QStringList Expander::splitEach(TagString stringToSplit)
 {
     if (stringToSplit.isSimple()) {
-//   krOut << stringToSplit.string() << endl;
+//   qWarning() << stringToSplit.string();
         QStringList l;
         l << stringToSplit.string();
         return l;
@@ -1096,7 +1100,7 @@ QStringList Expander::splitEach(TagString stringToSplit)
         ret += splitEach(s);
     }
     return ret;
-//    qDebug() << "stringToSplit: " << stringToSplit << endl;
+//    qDebug() << "stringToSplit: " << stringToSplit;
 }
 
 TagStringList Expander::separateParameter(QString* const exp, bool useUrl)
@@ -1126,7 +1130,7 @@ TagStringList Expander::separateParameter(QString* const exp, bool useUrl)
             if (result[ idx ].toLatin1() == ',' && !inQuotes) {
                 parameter1.append(result.mid(begin, idx - begin));
                 begin = idx + 1;
-//             krOut << " ---- parameter: " << parameter.join(";") << endl;
+//             qWarning() << " ---- parameter: " << parameter.join(";");
             }
             idx++;
         }
@@ -1142,7 +1146,7 @@ TagStringList Expander::separateParameter(QString* const exp, bool useUrl)
         }
     }
 
-//    krOut << "------- exp: " << *exp << " ---- parameter: " << parameter.join(";") << endl;
+//    qWarning() << "------- exp: " << *exp << " ---- parameter: " << parameter.join(";");
     return parameter;
 }
 

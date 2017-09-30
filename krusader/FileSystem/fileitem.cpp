@@ -31,6 +31,7 @@
 #include "fileitem.h"
 
 // QtCore
+#include <QCache>
 #include <QDateTime>
 #include <QMimeDatabase>
 #include <QMimeType>
@@ -42,16 +43,26 @@
 
 bool FileItem::userDefinedFolderIcons = true;
 
-// TODO set default size to '-1' to distinguish between empty directories and directories with
-// unknown size
+// wrapper class; QCache needs objects
+class FileSize
+{
+public:
+    const KIO::filesize_t m_size;
+    FileSize(KIO::filesize_t size) : m_size(size) {}
+};
+
+// cache for calculated directory sizes;
+static QCache<const QUrl, FileSize> s_fileSizeCache(1000);
 
 FileItem::FileItem(const QString &name, const QUrl &url, bool isDir,
-             KIO::filesize_t size, mode_t mode, time_t mtime,
+             KIO::filesize_t size, mode_t mode,
+             time_t mtime, time_t ctime, time_t atime,
              uid_t uid, gid_t gid, const QString &owner, const QString &group,
              bool isLink, const QString &linkDest, bool isBrokenLink,
              const QString &acl, const QString &defaultAcl)
     : m_name(name), m_url(url), m_isDir(isDir),
-      m_size(size), m_mode(mode), m_mtime(mtime),
+      m_size(size), m_mode(mode),
+      m_mtime(mtime), m_ctime(ctime), m_atime(atime),
       m_uid(uid), m_gid(gid), m_owner(owner), m_group(group),
       m_isLink(isLink), m_linkDest(linkDest), m_isBrokenLink(isBrokenLink),
       m_acl(acl), m_defaulfAcl(defaultAcl), m_AclLoaded(false),
@@ -65,13 +76,15 @@ FileItem::FileItem(const QString &name, const QUrl &url, bool isDir,
     if (m_group.isEmpty())
         m_group = KRpermHandler::gid2group(m_gid);
 
-    if (m_isDir && !m_isLink)
-        m_size = 0;
+    if (m_isDir && !m_isLink) {
+        m_size = s_fileSizeCache.contains(m_url) ? s_fileSizeCache[m_url]->m_size : -1;
+    }
 }
 
 FileItem *FileItem::createDummy()
 {
     FileItem *file = new FileItem("..", QUrl(), true,
+                            0, 0,
                             0, 0, 0);
     file->setIcon("go-up");
     return file;
@@ -80,14 +93,16 @@ FileItem *FileItem::createDummy()
 FileItem *FileItem::createVirtualDir(const QString &name, const QUrl &url)
 {
     return new FileItem(name, url, true,
-                     0, 0700, time(0),
+                     0, 0700,
+                     time(0), time(0), time(0),
                      getuid(), getgid());
 }
 
 FileItem *FileItem::createCopy(const FileItem &file, const QString &newName)
 {
     return new FileItem(newName, file.getUrl(), file.isDir(),
-                     file.getSize(), file.getMode(), file.getTime_t(),
+                     file.getSize(), file.getMode(),
+                     file.getTime_t(), file.getChangedTime(), file.getAccessTime(),
                      file.m_uid, file.m_gid, file.getOwner(), file.getGroup(),
                      file.isSymLink(), file.getSymDest(), file.isBrokenLink());
 }
@@ -114,6 +129,12 @@ char FileItem::isExecutable() const
         return KRpermHandler::executable(m_permissions, m_gid, m_uid);
     else
         return KRpermHandler::ftpExecutable(m_owner, m_url.userName(), m_permissions);
+}
+
+void FileItem::setSize(KIO::filesize_t size)
+{
+    m_size = size;
+    s_fileSizeCache.insert(m_url, new FileSize(size));
 }
 
 const QString &FileItem::getMime()
@@ -184,6 +205,8 @@ const KIO::UDSEntry FileItem::getEntry()
     entry.insert(KIO::UDSEntry::UDS_NAME, getName());
     entry.insert(KIO::UDSEntry::UDS_SIZE, getSize());
     entry.insert(KIO::UDSEntry::UDS_MODIFICATION_TIME, getTime_t());
+    entry.insert(KIO::UDSEntry::UDS_CREATION_TIME, getChangedTime());
+    entry.insert(KIO::UDSEntry::UDS_ACCESS_TIME, getAccessTime());
     entry.insert(KIO::UDSEntry::UDS_USER, getOwner());
     entry.insert(KIO::UDSEntry::UDS_GROUP, getGroup());
     entry.insert(KIO::UDSEntry::UDS_MIME_TYPE, getMime());

@@ -31,6 +31,7 @@
 #include "diskusage.h"
 
 // QtCore
+#include <QDebug>
 #include <QEvent>
 #include <QHash>
 #include <QMimeDatabase>
@@ -59,17 +60,18 @@
 #include <KIO/Job>
 #include <KIO/DeleteJob>
 
-#include "../FileSystem/krpermhandler.h"
-#include "../FileSystem/filesystemprovider.h"
-#include "../kicons.h"
-#include "../defaults.h"
-#include "../krglobal.h"
-#include "../Panel/krpanel.h"
-#include "../Panel/panelfunc.h"
-#include "filelightParts/Config.h"
+#include "dufilelight.h"
 #include "dulines.h"
 #include "dulistview.h"
-#include "dufilelight.h"
+#include "filelightParts/Config.h"
+#include "../FileSystem/fileitem.h"
+#include "../FileSystem/filesystemprovider.h"
+#include "../FileSystem/krpermhandler.h"
+#include "../Panel/krpanel.h"
+#include "../Panel/panelfunc.h"
+#include "../defaults.h"
+#include "../kicons.h"
+#include "../krglobal.h"
 
 // these are the values that will exist in the menu
 #define DELETE_ID            90
@@ -266,7 +268,7 @@ void DiskUsage::load(const QUrl &baseDir)
     }
     searchFileSystem = FileSystemProvider::instance().getFilesystem(baseDir);
     if (searchFileSystem == 0) {
-        krOut << "diskusage could not get filesystem for directory " << baseDir;
+        qWarning() << "could not get filesystem for directory=" << baseDir;
         loading = abortLoading = clearAfterAbort = false;
         emit loadFinished(false);
         return;
@@ -338,7 +340,7 @@ void DiskUsage::slotLoadDirectory()
 
                 loaderView->setCurrentURL(url);
 
-                if (!searchFileSystem->refresh(url))
+                if (!searchFileSystem->scanDir(url))
                     break;
                 fileItems = searchFileSystem->fileItems();
 
@@ -873,16 +875,19 @@ void DiskUsage::keyPressEvent(QKeyEvent *e)
                 executeAction(EXCLUDE_ID, getCurrentFile());
                 return;
             }
+            break;
         case Qt::Key_D:
             if (e->modifiers() == Qt::ControlModifier) {
                 executeAction(DETAILED_VIEW_ID);
                 return;
             }
+            break;
         case Qt::Key_F:
             if (e->modifiers() == Qt::ControlModifier) {
                 executeAction(FILELIGHT_VIEW_ID);
                 return;
             }
+            break;
         case Qt::Key_I:
             if (e->modifiers() == Qt::ControlModifier) {
                 executeAction(INCLUDE_ALL_ID);
@@ -894,6 +899,7 @@ void DiskUsage::keyPressEvent(QKeyEvent *e)
                 executeAction(LINES_VIEW_ID);
                 return;
             }
+            break;
         case Qt::Key_N:
             if (e->modifiers() == Qt::ControlModifier) {
                 executeAction(NEW_SEARCH_ID);
@@ -935,6 +941,7 @@ void DiskUsage::keyPressEvent(QKeyEvent *e)
                 executeAction(DELETE_ID, getCurrentFile());
                 return;
             }
+            break;
         case Qt::Key_Plus:
             if (activeView == VIEW_FILELIGHT) {
                 filelightView->zoomIn();
