@@ -89,8 +89,18 @@ public:
     void emitGoBack() { emit goBack(); }
     void emitGoForward() { emit goForward(); }
 
-    bool searchItem(const QString &, bool, int = 0); // search for item and set cursor
-    bool filterSearch(const QString &, bool);        // filter view items
+    /**
+     * Search for an item by file name beginning at the current cursor position and set the
+     * cursor to it.
+     *
+     * @param text file name to search for, can be regex
+     * @return true if there is a next/previous item matching the text, else false
+     */
+    bool searchItem(const QString &text, bool caseSensitive, int direction = 0);
+    /**
+     * Filter view items.
+     */
+    bool filterSearch(const QString &, bool);
     void setMassSelectionUpdate(bool upd);
     bool isMassSelectionUpdate() { return _massSelectionUpdate; }
     void settingsChanged(KrViewProperties::PropertyType properties);
@@ -258,7 +268,7 @@ public:
     void invertSelection();
     QString nameToMakeCurrent() const { return _nameToMakeCurrent; }
     void setNameToMakeCurrent(const QString name) { _nameToMakeCurrent = name; }
-    QString firstUnmarkedBelowCurrent();
+    QString firstUnmarkedBelowCurrent(const bool skipCurrent);
     QString statistics();
     const KrViewProperties *properties() const { return _properties; }
     KrViewOperator *op() const { return _operator; }
