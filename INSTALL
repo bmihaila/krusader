@@ -146,10 +146,6 @@ $ tar xvf krusader-xx.xx.tar.xz
   it is fixed, but we treat it as the thin ice.
 
 In order to make sure that the present folder is the parent directory of the "krusader" source code folder, this command can be executed:
-    ls krusader/krusader
-and it should answer something like:
-    abstractpanelmanager.h  Dialogs     kicons.h           KrJS            krusaderlisterui.rc
-    [...]
 then CMake can be executed this way:
 $ mkdir krusader-build
 $ cd krusader-build
